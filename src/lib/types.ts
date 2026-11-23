@@ -175,6 +175,61 @@ export interface PackageManagerDistribution {
   badge: string;
 }
 
+export interface PayingTeamAccount {
+  id: string;
+  customerId: string;
+  teamName: string;
+  email: string;
+  plan: "Poly Cloud Team" | "Poly Enterprise Security";
+  planAmount: 29 | 49;
+  currency: string;
+  status: "active" | "trialing" | "past_due" | "canceled";
+  currentPeriodEnd: string;
+  createdAt: string;
+  seats: number;
+  cacheHitRatio: number; // e.g. 88.4%
+  bandwidthUsedGb: number; // e.g. 42.6 GB
+  cachedArtifactsCount: number; // e.g. 18,420
+  stripeLink?: string;
+}
+
+export interface BillingWebhookEvent {
+  id: string;
+  type:
+    | "customer.subscription.created"
+    | "customer.subscription.updated"
+    | "customer.subscription.deleted"
+    | "invoice.payment_succeeded"
+    | "invoice.payment_failed"
+    | "checkout.session.completed";
+  created: string;
+  amount: number;
+  currency: string;
+  customerName: string;
+  customerEmail: string;
+  status: "processed" | "delivered" | "failed";
+}
+
+export interface CommercializationMetrics {
+  provider: "stripe" | "dodo" | "sandbox";
+  connected: boolean;
+  apiKeyMasked?: string;
+  webhookUrl: string;
+  webhookSecretConfigured: boolean;
+  mrr: number; // Monthly Recurring Revenue
+  arr: number; // Annual Run Rate (MRR * 12)
+  payingTeamsCount: number;
+  activeSubscriptionsCount: number;
+  trialingCount: number;
+  churnRatePercent: number; // e.g. 0.9%
+  netRevenueRetentionPercent: number; // e.g. 118.4%
+  averageRevenuePerUser: number; // ARPU e.g. $37.04
+  customerLifetimeValue: number; // LTV = ARPU / Churn
+  mrrGrowthMoM: number; // e.g. +22.4%
+  teams: PayingTeamAccount[];
+  recentWebhooks: BillingWebhookEvent[];
+}
+
 export interface MissionControlData {
   collectedAt: string;
   org: string;
@@ -188,6 +243,7 @@ export interface MissionControlData {
   workflowRuns: WorkflowRunTelemetry[];
   traffic: RepoTrafficSummary;
   trafficData: RepoTrafficData[];
+  billing?: CommercializationMetrics;
   totals: {
     totalNpmMonth: number;
     totalNpmWeek: number;

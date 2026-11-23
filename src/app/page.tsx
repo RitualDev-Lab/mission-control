@@ -5,6 +5,7 @@ import { EcosystemTab } from "@/components/EcosystemTab";
 import { FleetTab } from "@/components/FleetTab";
 import { Header } from "@/components/Header";
 import { KpiGrid } from "@/components/KpiGrid";
+import { MonetizationTab } from "@/components/MonetizationTab";
 import { RadarTab } from "@/components/RadarTab";
 import { SecurityTab } from "@/components/SecurityTab";
 import { TelemetryTab } from "@/components/TelemetryTab";
@@ -15,6 +16,7 @@ import {
   Activity,
   AlertTriangle,
   Calculator,
+  DollarSign,
   Download,
   FileText,
   Inbox,
@@ -239,7 +241,7 @@ export default function MissionControlDashboard() {
     { key: "security" as TabKey, label: "Security & IP Gate", count: data.totals.totalSecurityAlerts, icon: ShieldCheck },
     { key: "ecosystem" as TabKey, label: "Registries & Downloads", count: data.totals.totalNpmMonth, icon: Download },
     { key: "telemetry" as TabKey, label: "Live CI & Telemetry", count: data.telemetryLogs.length, icon: Activity },
-    { key: "monetization" as TabKey, label: "Revenue & Conversion", icon: Calculator },
+    { key: "monetization" as TabKey, label: "Revenue & Conversion", count: 2482, icon: DollarSign },
     { key: "briefing" as TabKey, label: "AI Executive Briefing", icon: FileText },
   ];
 
@@ -323,77 +325,7 @@ export default function MissionControlDashboard() {
           )}
           {activeTab === "telemetry" && <TelemetryTab logs={data.telemetryLogs} />}
           {activeTab === "briefing" && <BriefingTab data={data} />}
-          {activeTab === "monetization" && (
-            <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-8 backdrop-blur-md space-y-6">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400">
-                  <Calculator className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-base">Ecosystem Monetization & Revenue Modeling</h3>
-                  <p className="text-xs text-slate-400 font-mono">
-                    Simulation based on {data.totals.totalNpmMonth.toLocaleString()} active monthly package downloads
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="p-6 rounded-2xl bg-slate-950/70 border border-slate-800 text-center">
-                  <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">
-                    Conservative (1% Conversion)
-                  </span>
-                  <div className="text-3xl font-bold font-mono text-emerald-400 mb-2">
-                    ${Math.round(data.totals.totalNpmMonth * 0.01 * 29).toLocaleString()}{" "}
-                    <span className="text-xs text-slate-500 font-normal">/ month</span>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    {Math.round(data.totals.totalNpmMonth * 0.01)} teams on Poly Cloud Team plan ($29/mo)
-                  </p>
-                </div>
-
-                <div className="p-6 rounded-2xl bg-slate-950/70 border border-slate-800 text-center border-sky-500/40 relative">
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-sky-500 text-slate-950 text-[10px] font-bold font-mono">
-                    TARGET
-                  </div>
-                  <span className="text-xs font-mono text-sky-400 uppercase tracking-wider block mb-1">
-                    Moderate (3% Conversion)
-                  </span>
-                  <div className="text-3xl font-bold font-mono text-white mb-2">
-                    ${Math.round(data.totals.totalNpmMonth * 0.03 * 29).toLocaleString()}{" "}
-                    <span className="text-xs text-slate-500 font-normal">/ month</span>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    {Math.round(data.totals.totalNpmMonth * 0.03)} teams on Poly Cloud Team plan ($29/mo)
-                  </p>
-                </div>
-
-                <div className="p-6 rounded-2xl bg-slate-950/70 border border-slate-800 text-center">
-                  <span className="text-xs font-mono text-purple-400 uppercase tracking-wider block mb-1">
-                    Enterprise Tier (5% Conversion)
-                  </span>
-                  <div className="text-3xl font-bold font-mono text-purple-400 mb-2">
-                    ${Math.round(data.totals.totalNpmMonth * 0.05 * 49).toLocaleString()}{" "}
-                    <span className="text-xs text-slate-500 font-normal">/ month</span>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    {Math.round(data.totals.totalNpmMonth * 0.05)} organizations on Enterprise Security plan ($49/mo)
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800 text-xs font-mono text-slate-400 flex items-center justify-between">
-                <span>Direct Checkout Billing Endpoint:</span>
-                <a
-                  href="https://poly.ritualdev.in#cloud"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sky-400 hover:underline"
-                >
-                  https://poly.ritualdev.in#cloud &rarr;
-                </a>
-              </div>
-            </div>
-          )}
+          {activeTab === "monetization" && <MonetizationTab data={data} />}
         </div>
       </main>
     </div>
