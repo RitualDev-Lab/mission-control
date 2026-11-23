@@ -77,6 +77,27 @@ export interface GitHubBinaryMetrics {
   }[];
 }
 
+export interface WorkflowRunTelemetry {
+  id: string;
+  repo: string;
+  name: string;
+  headBranch: string;
+  headSha: string;
+  status: "completed" | "in_progress" | "queued";
+  conclusion: "success" | "failure" | "cancelled" | "neutral" | null;
+  createdAt: string;
+  htmlUrl: string;
+  event: string;
+  runNumber: number;
+}
+
+export interface RepoTrafficSummary {
+  viewsCount: number;
+  uniquesCount: number;
+  clonesCount: number;
+  clonesUniques: number;
+}
+
 export interface TelemetryCrashLog {
   id: string;
   timestamp: string;
@@ -87,6 +108,8 @@ export interface TelemetryCrashLog {
   arch: string;
   polyVersion: string;
   runtimeVersion: string;
+  htmlUrl?: string;
+  status?: string;
 }
 
 export interface MissionControlData {
@@ -97,6 +120,8 @@ export interface MissionControlData {
   openVsx: OpenVsxMetrics[];
   binaries: GitHubBinaryMetrics[];
   telemetryLogs: TelemetryCrashLog[];
+  workflowRuns: WorkflowRunTelemetry[];
+  traffic: RepoTrafficSummary;
   totals: {
     totalNpmMonth: number;
     totalNpmWeek: number;
@@ -109,5 +134,7 @@ export interface MissionControlData {
     totalSecurityAlerts: number;
     totalPublicRepos: number;
     totalPrivateRepos: number;
+    totalClones: number;
+    totalViews: number;
   };
 }

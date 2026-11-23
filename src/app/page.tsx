@@ -14,7 +14,6 @@ import {
   AlertTriangle,
   Calculator,
   Download,
-  Eye,
   FileText,
   KeyRound,
   Lock,
@@ -40,57 +39,53 @@ export default function MissionControlDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const checkAuthAndLoad = async (overrideToken?: string, isSync = false, isGuest = false) => {
+  const checkAuthAndLoad = async (overrideToken?: string, isSync = false) => {
     if (isSync) setRefreshing(true);
     const token =
       overrideToken ||
       (typeof window !== "undefined" ? localStorage.getItem("ritual_admin_token") : null);
 
-    if (!token && !isGuest) {
+    if (!token) {
       setLoading(false);
       setIsAuthenticated(false);
       return;
     }
 
     try {
-      if (token) {
-        // Verify token belongs to divyanshujethi
-        const userRes = await fetch("https://api.github.com/user", {
-          headers: {
-            Authorization: `token ${token}`,
-            Accept: "application/vnd.github.v3+json",
-          },
-        });
+      // Verify token belongs to divyanshujethi or ritual-dev-git (or specifically provided ghp token)
+      const userRes = await fetch("https://api.github.com/user", {
+        headers: {
+          Authorization: `token ${token}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      });
 
-        if (!userRes.ok) {
-          throw new Error("Invalid GitHub token or expired credentials.");
-        }
-
-        const userData = await userRes.json();
-        if (userData.login.toLowerCase() !== "divyanshujethi") {
-          throw new Error(
-            `Unauthorized user (${userData.login}). Access restricted strictly to 'divyanshujethi'.`
-          );
-        }
-
-        setUser(userData.login);
-        setIsAuthenticated(true);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("ritual_admin_token", token);
-        }
-
-        // Fetch All 37+ Organization Repositories & Registry Metrics
-        const fullData = await fetchFullMissionControlData(token);
-        setData(fullData);
-        setError(null);
-      } else {
-        // Guest mode: fetch all public org repositories and registry stats
-        setUser("guest (read-only)");
-        setIsAuthenticated(true);
-        const fullData = await fetchFullMissionControlData();
-        setData(fullData);
-        setError(null);
+      if (!userRes.ok) {
+        throw new Error("Invalid GitHub token or expired credentials.");
       }
+
+      const userData = await userRes.json();
+      const login = (userData.login || "").toLowerCase();
+      // Authorized Superadmins: divyanshujethi and Ritual-Dev-Git
+      const ALLOWED_LOGINS = ["divyanshujethi", "ritual-dev-git"];
+      const isAllowed = ALLOWED_LOGINS.includes(login);
+
+      if (!isAllowed) {
+        throw new Error(
+          `Unauthorized user (${userData.login}). Access restricted strictly to 'divyanshujethi' and RitualDev admin.`
+        );
+      }
+
+      setUser(userData.login);
+      setIsAuthenticated(true);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("ritual_admin_token", token);
+      }
+
+      // Fetch All 37 Organization Repositories & Real Registry/Actions Telemetry
+      const fullData = await fetchFullMissionControlData(token);
+      setData(fullData);
+      setError(null);
     } catch (err: any) {
       setAuthError(err.message || "Failed to authenticate with GitHub API.");
       setIsAuthenticated(false);
@@ -145,7 +140,7 @@ export default function MissionControlDashboard() {
                 <div>
                   <span className="font-semibold text-white">Superadmin Protected Gate</span>
                   <p className="text-slate-400 text-[11px] mt-0.5">
-                    Restricted strictly to organization administrator: <code className="text-sky-300 font-mono">divyanshujethi</code>.
+                    Restricted strictly to organization administrator <code className="text-sky-300 font-mono">divyanshujethi</code> and authorized RitualDev operations credentials.
                   </p>
                 </div>
               </div>
@@ -181,25 +176,6 @@ export default function MissionControlDashboard() {
                 >
                   <Lock className="w-3.5 h-3.5" />
                   <span>Unlock Superadmin Cockpit</span>
-                </button>
-
-                <div className="relative my-4 flex items-center justify-center">
-                  <div className="border-t border-slate-800 w-full" />
-                  <span className="bg-slate-900 px-3 text-[10px] font-mono text-slate-500 uppercase tracking-widest absolute">
-                    or
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoading(true);
-                    checkAuthAndLoad(undefined, false, true);
-                  }}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 font-medium text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer"
-                >
-                  <Eye className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Explore Public View (Read-Only)</span>
                 </button>
               </form>
 
@@ -248,7 +224,7 @@ export default function MissionControlDashboard() {
     { key: "radar" as TabKey, label: "Code Radar", count: data.repos.length, icon: Radio },
     { key: "ecosystem" as TabKey, label: "Registries & Downloads", count: data.totals.totalNpmMonth, icon: Download },
     { key: "security" as TabKey, label: "Security & IP Gate", count: data.totals.totalSecurityAlerts, icon: ShieldCheck },
-    { key: "telemetry" as TabKey, label: "CLI Crashes & Pings", count: data.telemetryLogs.length, icon: Activity },
+    { key: "telemetry" as TabKey, label: "Live CI & Telemetry", count: data.telemetryLogs.length, icon: Activity },
     { key: "monetization" as TabKey, label: "Revenue & Conversion", icon: Calculator },
     { key: "briefing" as TabKey, label: "AI Executive Briefing", icon: FileText },
   ];

@@ -6,7 +6,9 @@ import type {
   OrgRepoSummary,
   RepoIssue,
   RepoPullRequest,
+  RepoTrafficSummary,
   TelemetryCrashLog,
+  WorkflowRunTelemetry,
 } from "./types";
 
 export const ORG_NAME = "RitualDev-Lab";
@@ -55,42 +57,8 @@ export function categorizeRepo(name: string): OrgRepoSummary["category"] {
   return "other";
 }
 
-// In-memory or client-side telemetry buffer
-const DEFAULT_TELEMETRY_BUFFER: TelemetryCrashLog[] = [
-  {
-    id: "ping-01",
-    timestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-    command: "poly install --frozen",
-    errorName: "LOCKFILE_TAMPER_DETECTED",
-    message: "Tamper detected: package-lock.json modified out-of-band on runner.",
-    os: "linux",
-    arch: "x64",
-    polyVersion: "0.6.1",
-    runtimeVersion: "Node.js v22.12.0",
-  },
-  {
-    id: "ping-02",
-    timestamp: new Date(Date.now() - 1000 * 60 * 142).toISOString(),
-    command: "poly firewall check pypi:pygobject",
-    errorName: "FIREWALL_LICENSE_GATE",
-    message: "Pre-execution block: GPL-3.0 copyleft license prohibited by enterprise policy.",
-    os: "darwin",
-    arch: "arm64",
-    polyVersion: "0.6.1",
-    runtimeVersion: "Python 3.12.3",
-  },
-  {
-    id: "ping-03",
-    timestamp: new Date(Date.now() - 1000 * 60 * 310).toISOString(),
-    command: "poly test --affected",
-    errorName: "GIT_DIFF_SHALLOW_CLONE",
-    message: "Shallow clone detected: auto-fetched origin/main ref to resolve affected matrix.",
-    os: "windows",
-    arch: "x64",
-    polyVersion: "0.6.1",
-    runtimeVersion: "Node.js v20.18.0",
-  },
-];
+// Live GitHub Actions & Ecosystem Telemetry
+
 
 export async function fetchFullMissionControlData(githubToken?: string): Promise<MissionControlData> {
   const token =
@@ -333,6 +301,119 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
     // Ignore
   }
 
+  // 5. Fetch Real GitHub Actions Workflow Runs across key repositories
+  const activeReposForRuns = [
+    "poly",
+    "mission-control",
+    "AgentShield",
+    "ecosystem-telemetry",
+    "setup-poly",
+    "FinePrintAI",
+  ];
+  const workflowRuns: WorkflowRunTelemetry[] = [];
+  const telemetryLogs: TelemetryCrashLog[] = [];
+
+  if (token) {
+    await Promise.all(
+      activeReposForRuns.map(async (rName) => {
+        try {
+          const runsRes = await fetch(
+            `https://api.github.com/repos/${ORG_NAME}/${rName}/actions/runs?per_page=6`,
+            { headers: ghHeaders }
+          );
+          if (runsRes.ok) {
+            const data = await runsRes.json();
+            if (Array.isArray(data.workflow_runs)) {
+              for (const run of data.workflow_runs) {
+                workflowRuns.push({
+                  id: String(run.id),
+                  repo: rName,
+                  name: run.name || "CI Workflow",
+                  headBranch: run.head_branch || "main",
+                  headSha: (run.head_sha || "").substring(0, 7),
+                  status: run.status,
+                  conclusion: run.conclusion,
+                  createdAt: run.created_at,
+                  htmlUrl: run.html_url,
+                  event: run.event,
+                  runNumber: run.run_number,
+                });
+
+                // Map all runs into live telemetry
+                const isFailed = run.conclusion === "failure";
+                telemetryLogs.push({
+                  id: String(run.id),
+                  timestamp: run.created_at,
+                  command: `${rName} :: ${run.name} (#${run.run_number})`,
+                  errorName: isFailed
+                    ? "CI_PIPELINE_FAILURE"
+                    : run.conclusion
+                    ? run.conclusion.toUpperCase()
+                    : "IN_PROGRESS",
+                  message: `${run.event.toUpperCase()} trigger on branch '${
+                    run.head_branch || "main"
+                  }'. Commit ${run.head_sha?.slice(0, 7) || ""}: ${
+                    run.display_title || run.head_commit?.message || "Workflow run"
+                  }`,
+                  os: run.name?.toLowerCase().includes("windows")
+                    ? "windows"
+                    : run.name?.toLowerCase().includes("mac")
+                    ? "darwin"
+                    : "linux",
+                  arch: "x64",
+                  polyVersion: rName === "poly" ? "0.6.1" : "latest",
+                  runtimeVersion: "GitHub Actions Runner",
+                  htmlUrl: run.html_url,
+                  status: run.status,
+                });
+              }
+            }
+          }
+        } catch {
+          // Ignore
+        }
+      })
+    );
+  }
+
+  // Sort workflow runs and telemetry by date desc
+  workflowRuns.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  telemetryLogs.sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  // 6. Fetch Real GitHub Traffic (Views and Clones for poly)
+  let traffic: RepoTrafficSummary = {
+    viewsCount: 0,
+    uniquesCount: 0,
+    clonesCount: 0,
+    clonesUniques: 0,
+  };
+  if (token) {
+    try {
+      const [viewsRes, clonesRes] = await Promise.all([
+        fetch(`https://api.github.com/repos/${ORG_NAME}/poly/traffic/views`, {
+          headers: ghHeaders,
+        }).then((r) => (r.ok ? r.json() : null)),
+        fetch(`https://api.github.com/repos/${ORG_NAME}/poly/traffic/clones`, {
+          headers: ghHeaders,
+        }).then((r) => (r.ok ? r.json() : null)),
+      ]);
+      if (viewsRes) {
+        traffic.viewsCount = viewsRes.count || 0;
+        traffic.uniquesCount = viewsRes.uniques || 0;
+      }
+      if (clonesRes) {
+        traffic.clonesCount = clonesRes.count || 0;
+        traffic.clonesUniques = clonesRes.uniques || 0;
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
   // Compute Totals
   const totalNpmMonth = npmPackages.reduce((acc, p) => acc + p.downloads.lastMonth, 0);
   const totalNpmWeek = npmPackages.reduce((acc, p) => acc + p.downloads.lastWeek, 0);
@@ -353,7 +434,9 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
     npmPackages,
     openVsx,
     binaries,
-    telemetryLogs: DEFAULT_TELEMETRY_BUFFER,
+    telemetryLogs,
+    workflowRuns,
+    traffic,
     totals: {
       totalNpmMonth,
       totalNpmWeek,
@@ -366,6 +449,8 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
       totalSecurityAlerts,
       totalPublicRepos,
       totalPrivateRepos,
+      totalClones: traffic.clonesCount,
+      totalViews: traffic.viewsCount,
     },
   };
 }

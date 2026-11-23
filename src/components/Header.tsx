@@ -75,14 +75,10 @@ export function Header({ user, onRefresh, onLogout, isRefreshing, lastUpdated }:
 
           {/* Superadmin User Pill */}
           <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-            <ShieldCheck className={`w-4 h-4 ${user.toLowerCase() === "divyanshujethi" ? "text-emerald-400" : "text-amber-400"}`} />
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <span className="font-mono text-slate-200">{user}</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold border ${
-              user.toLowerCase() === "divyanshujethi"
-                ? "bg-indigo-950 text-indigo-300 border-indigo-800/50"
-                : "bg-amber-950 text-amber-300 border-amber-800/50"
-            }`}>
-              {user.toLowerCase() === "divyanshujethi" ? "ADMIN" : "GUEST"}
+            <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold border bg-indigo-950 text-indigo-300 border-indigo-800/50">
+              SUPERADMIN
             </span>
           </div>
 
