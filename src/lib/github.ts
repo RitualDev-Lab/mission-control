@@ -3,6 +3,7 @@ import type {
   MissionControlData,
   NpmPackageMetrics,
   OpenVsxMetrics,
+  OrgActivityEvent,
   OrgRepoSummary,
   PackageManagerDistribution,
   PyPiPackageMetrics,
@@ -10,7 +11,10 @@ import type {
   RepoPullRequest,
   RepoTrafficData,
   RepoTrafficSummary,
+  StargazerItem,
   TelemetryCrashLog,
+  TrafficPath,
+  TrafficReferrer,
   TriagerItem,
   WorkflowDispatchOption,
   WorkflowRunTelemetry,
@@ -389,32 +393,40 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
-  // 6. Fetch Multi-Repo 14-Day Traffic (Views and Clones)
+  // 6. Fetch Multi-Repo 14-Day Traffic (Views, Clones, Referrers, and Paths)
   const trafficRepos = [
     "poly",
     "AgentShield",
     "DevShelf",
+    "MCPShelf",
     "homebrew-tap",
     "scoop-bucket",
-    "MCPShelf",
+    "DBShield",
+    "PromptShield",
+    "SkillPrism",
+    "FinePrintAI",
+    "ritualdev-web",
+    "mission-control",
   ];
   const trafficData: RepoTrafficData[] = [];
-  let traffic: RepoTrafficSummary = {
-    viewsCount: 0,
-    uniquesCount: 0,
-    clonesCount: 0,
-    clonesUniques: 0,
-  };
+  const rawReferrersMap = new Map<string, { count: number; uniques: number }>();
+  const rawPathsMap = new Map<string, { title: string; count: number; uniques: number }>();
 
   if (token) {
     await Promise.all(
       trafficRepos.map(async (rName) => {
         try {
-          const [viewsRes, clonesRes] = await Promise.all([
+          const [viewsRes, clonesRes, referrersRes, pathsRes] = await Promise.all([
             fetch(`https://api.github.com/repos/${ORG_NAME}/${rName}/traffic/views`, {
               headers: ghHeaders,
             }).then((r) => (r.ok ? r.json() : null)),
             fetch(`https://api.github.com/repos/${ORG_NAME}/${rName}/traffic/clones`, {
+              headers: ghHeaders,
+            }).then((r) => (r.ok ? r.json() : null)),
+            fetch(`https://api.github.com/repos/${ORG_NAME}/${rName}/traffic/popular/referrers`, {
+              headers: ghHeaders,
+            }).then((r) => (r.ok ? r.json() : null)),
+            fetch(`https://api.github.com/repos/${ORG_NAME}/${rName}/traffic/popular/paths`, {
               headers: ghHeaders,
             }).then((r) => (r.ok ? r.json() : null)),
           ]);
@@ -425,6 +437,27 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
           const uniqueViewers = viewsRes?.uniques || 0;
           const clonesHistory = clonesRes?.clones || [];
           const viewsHistory = viewsRes?.views || [];
+          const repoReferrers: TrafficReferrer[] = Array.isArray(referrersRes) ? referrersRes : [];
+          const repoPaths: TrafficPath[] = Array.isArray(pathsRes) ? pathsRes : [];
+
+          // Aggregate into global referrers
+          repoReferrers.forEach((ref) => {
+            const existing = rawReferrersMap.get(ref.referrer) || { count: 0, uniques: 0 };
+            rawReferrersMap.set(ref.referrer, {
+              count: existing.count + ref.count,
+              uniques: existing.uniques + ref.uniques,
+            });
+          });
+
+          // Aggregate into global paths
+          repoPaths.forEach((p) => {
+            const existing = rawPathsMap.get(p.path) || { title: p.title || p.path, count: 0, uniques: 0 };
+            rawPathsMap.set(p.path, {
+              title: p.title || existing.title,
+              count: existing.count + p.count,
+              uniques: existing.uniques + p.uniques,
+            });
+          });
 
           trafficData.push({
             repo: rName,
@@ -434,18 +467,131 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
             uniqueViewers,
             clonesHistory,
             viewsHistory,
+            referrers: repoReferrers,
+            paths: repoPaths,
           });
+        } catch {
+          // Ignore individual repo traffic failures
+        }
+      })
+    );
+  }
 
-          if (rName === "poly") {
-            traffic.clonesCount = totalClones;
-            traffic.clonesUniques = uniqueCloners;
-            traffic.viewsCount = totalViews;
-            traffic.uniquesCount = uniqueViewers;
+  // Calculate Organization-wide Totals for Traffic & Visitors
+  const totalOrgViews = trafficData.reduce((acc, t) => acc + t.totalViews, 0);
+  const totalOrgUniqueVisitors = trafficData.reduce((acc, t) => acc + t.uniqueViewers, 0);
+  const totalOrgClones = trafficData.reduce((acc, t) => acc + t.totalClones, 0);
+  const totalOrgUniqueCloners = trafficData.reduce((acc, t) => acc + t.uniqueCloners, 0);
+
+  const traffic: RepoTrafficSummary = {
+    viewsCount: totalOrgViews,
+    uniquesCount: totalOrgUniqueVisitors,
+    clonesCount: totalOrgClones,
+    clonesUniques: totalOrgUniqueCloners,
+  };
+
+  const trafficReferrers: TrafficReferrer[] = Array.from(rawReferrersMap.entries())
+    .map(([referrer, data]) => ({
+      referrer,
+      count: data.count,
+      uniques: data.uniques,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const trafficPaths: TrafficPath[] = Array.from(rawPathsMap.entries())
+    .map(([path, data]) => ({
+      path,
+      title: data.title,
+      count: data.count,
+      uniques: data.uniques,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  // 6b. Fetch Organization Activity Events (Real Audit Stream)
+  const orgEvents: OrgActivityEvent[] = [];
+  if (token) {
+    try {
+      const eventsRes = await fetch(
+        `https://api.github.com/orgs/${ORG_NAME}/events?per_page=30`,
+        { headers: ghHeaders }
+      );
+      if (eventsRes.ok) {
+        const rawEvents = await eventsRes.json();
+        if (Array.isArray(rawEvents)) {
+          rawEvents.forEach((ev: any) => {
+            const actor = ev.actor?.login || "github-actions";
+            const repoName = (ev.repo?.name || "").replace(`${ORG_NAME}/`, "");
+            let detail = "";
+            if (ev.type === "PushEvent") {
+              const commitCount = ev.payload?.commits?.length || 1;
+              const msg = ev.payload?.commits?.[0]?.message || "";
+              detail = `Pushed ${commitCount} commit(s): ${msg.slice(0, 60)}`;
+            } else if (ev.type === "PullRequestEvent") {
+              detail = `PR #${ev.payload?.pull_request?.number || ""}: ${ev.payload?.action || ""} "${(ev.payload?.pull_request?.title || "").slice(0, 50)}"`;
+            } else if (ev.type === "IssuesEvent") {
+              detail = `Issue #${ev.payload?.issue?.number || ""}: ${ev.payload?.action || ""} "${(ev.payload?.issue?.title || "").slice(0, 50)}"`;
+            } else if (ev.type === "IssueCommentEvent") {
+              detail = `Commented on #${ev.payload?.issue?.number || ""}: "${(ev.payload?.comment?.body || "").slice(0, 50)}"`;
+            } else {
+              detail = `${ev.type.replace("Event", "")} on ${repoName}`;
+            }
+
+            orgEvents.push({
+              id: ev.id,
+              type: ev.type,
+              actor,
+              actorAvatar: ev.actor?.avatar_url || `https://github.com/${actor}.png`,
+              repo: repoName,
+              action: ev.payload?.action || "activity",
+              createdAt: ev.created_at,
+              url: `https://github.com/${ev.repo?.name || ORG_NAME}`,
+              detail,
+            });
+          });
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // 6c. Fetch Real Community Stargazers across Key Repos
+  const stargazers: StargazerItem[] = [];
+  if (token) {
+    const starTargetRepos = ["DevShelf", "AgentShield", "poly", "MCPShelf"];
+    await Promise.all(
+      starTargetRepos.map(async (rName) => {
+        try {
+          const starsRes = await fetch(
+            `https://api.github.com/repos/${ORG_NAME}/${rName}/stargazers?per_page=10`,
+            {
+              headers: {
+                ...ghHeaders,
+                Accept: "application/vnd.github.v3.star+json",
+              },
+            }
+          );
+          if (starsRes.ok) {
+            const rawStars = await starsRes.json();
+            if (Array.isArray(rawStars)) {
+              rawStars.forEach((s: any) => {
+                stargazers.push({
+                  user: s.user?.login || "contributor",
+                  avatarUrl: s.user?.avatar_url || `https://github.com/${s.user?.login}.png`,
+                  repo: rName,
+                  starredAt: s.starred_at || new Date().toISOString(),
+                  profileUrl: s.user?.html_url || `https://github.com/${s.user?.login}`,
+                });
+              });
+            }
           }
         } catch {
           // Ignore
         }
       })
+    );
+    stargazers.sort(
+      (a, b) => new Date(b.starredAt).getTime() - new Date(a.starredAt).getTime()
     );
   }
 
@@ -628,6 +774,10 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
     workflowRuns,
     traffic,
     trafficData,
+    trafficReferrers,
+    trafficPaths,
+    orgEvents,
+    stargazers,
     totals: {
       totalNpmMonth,
       totalNpmWeek,
@@ -643,6 +793,8 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
       totalPrivateRepos,
       totalClones: traffic.clonesCount,
       totalViews: traffic.viewsCount,
+      totalUniqueVisitors: traffic.uniquesCount,
+      totalUniqueCloners: traffic.clonesUniques,
     },
   };
 }

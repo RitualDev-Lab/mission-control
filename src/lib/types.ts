@@ -130,6 +130,39 @@ export interface RepoTrafficSummary {
   clonesUniques: number;
 }
 
+export interface TrafficReferrer {
+  referrer: string;
+  count: number;
+  uniques: number;
+}
+
+export interface TrafficPath {
+  path: string;
+  title: string;
+  count: number;
+  uniques: number;
+}
+
+export interface OrgActivityEvent {
+  id: string;
+  type: string;
+  actor: string;
+  actorAvatar: string;
+  repo: string;
+  action?: string;
+  createdAt: string;
+  url?: string;
+  detail?: string;
+}
+
+export interface StargazerItem {
+  user: string;
+  avatarUrl: string;
+  repo: string;
+  starredAt: string;
+  profileUrl: string;
+}
+
 export interface TelemetryCrashLog {
   id: string;
   timestamp: string;
@@ -152,6 +185,8 @@ export interface RepoTrafficData {
   uniqueViewers: number;
   clonesHistory: { timestamp: string; count: number; uniques: number }[];
   viewsHistory: { timestamp: string; count: number; uniques: number }[];
+  referrers?: TrafficReferrer[];
+  paths?: TrafficPath[];
 }
 
 export interface PyPiPackageMetrics {
@@ -190,18 +225,21 @@ export interface PayingTeamAccount {
   cacheHitRatio: number; // e.g. 88.4%
   bandwidthUsedGb: number; // e.g. 42.6 GB
   cachedArtifactsCount: number; // e.g. 18,420
+  dodoLink?: string;
   stripeLink?: string;
 }
 
 export interface BillingWebhookEvent {
   id: string;
   type:
+    | "subscription.created"
+    | "subscription.active"
+    | "subscription.updated"
+    | "subscription.cancelled"
+    | "payment.succeeded"
+    | "payment.failed"
     | "customer.subscription.created"
-    | "customer.subscription.updated"
-    | "customer.subscription.deleted"
-    | "invoice.payment_succeeded"
-    | "invoice.payment_failed"
-    | "checkout.session.completed";
+    | "invoice.payment_succeeded";
   created: string;
   amount: number;
   currency: string;
@@ -211,8 +249,9 @@ export interface BillingWebhookEvent {
 }
 
 export interface CommercializationMetrics {
-  provider: "stripe" | "dodo" | "sandbox";
+  provider: "dodo" | "sandbox";
   connected: boolean;
+  environment?: "live" | "test";
   apiKeyMasked?: string;
   webhookUrl: string;
   webhookSecretConfigured: boolean;
@@ -221,11 +260,11 @@ export interface CommercializationMetrics {
   payingTeamsCount: number;
   activeSubscriptionsCount: number;
   trialingCount: number;
-  churnRatePercent: number; // e.g. 0.9%
-  netRevenueRetentionPercent: number; // e.g. 118.4%
-  averageRevenuePerUser: number; // ARPU e.g. $37.04
-  customerLifetimeValue: number; // LTV = ARPU / Churn
-  mrrGrowthMoM: number; // e.g. +22.4%
+  churnRatePercent: number;
+  netRevenueRetentionPercent: number;
+  averageRevenuePerUser: number; // ARPU
+  customerLifetimeValue: number; // LTV
+  mrrGrowthMoM: number;
   teams: PayingTeamAccount[];
   recentWebhooks: BillingWebhookEvent[];
 }
@@ -243,6 +282,10 @@ export interface MissionControlData {
   workflowRuns: WorkflowRunTelemetry[];
   traffic: RepoTrafficSummary;
   trafficData: RepoTrafficData[];
+  trafficReferrers?: TrafficReferrer[];
+  trafficPaths?: TrafficPath[];
+  orgEvents?: OrgActivityEvent[];
+  stargazers?: StargazerItem[];
   billing?: CommercializationMetrics;
   totals: {
     totalNpmMonth: number;
@@ -259,5 +302,7 @@ export interface MissionControlData {
     totalPrivateRepos: number;
     totalClones: number;
     totalViews: number;
+    totalUniqueVisitors: number;
+    totalUniqueCloners: number;
   };
 }

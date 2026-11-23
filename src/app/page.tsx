@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminIntelligenceTab } from "@/components/AdminIntelligenceTab";
 import { BriefingTab } from "@/components/BriefingTab";
 import { EcosystemTab } from "@/components/EcosystemTab";
 import { FleetTab } from "@/components/FleetTab";
@@ -36,6 +37,7 @@ type TabKey =
   | "triager"
   | "security"
   | "ecosystem"
+  | "intelligence"
   | "telemetry"
   | "briefing"
   | "monetization";
@@ -239,9 +241,10 @@ export default function MissionControlDashboard() {
     { key: "fleet" as TabKey, label: "Release Dispatcher", icon: Rocket },
     { key: "triager" as TabKey, label: "Issue Triager", count: data.totals.totalOpenIssues, icon: Inbox },
     { key: "security" as TabKey, label: "Security & IP Gate", count: data.totals.totalSecurityAlerts, icon: ShieldCheck },
-    { key: "ecosystem" as TabKey, label: "Registries & Downloads", count: data.totals.totalNpmMonth, icon: Download },
-    { key: "telemetry" as TabKey, label: "Live CI & Telemetry", count: data.telemetryLogs.length, icon: Activity },
-    { key: "monetization" as TabKey, label: "Revenue & Conversion", count: 2482, icon: DollarSign },
+    { key: "ecosystem" as TabKey, label: "Traffic & Registries", count: data.totals.totalViews, icon: Download },
+    { key: "intelligence" as TabKey, label: "Org Activity & Community", count: (data.orgEvents?.length || 0), icon: Activity },
+    { key: "monetization" as TabKey, label: "Commercial Operations", icon: DollarSign },
+    { key: "telemetry" as TabKey, label: "Live CI & Telemetry", count: data.telemetryLogs.length, icon: Sparkles },
     { key: "briefing" as TabKey, label: "AI Executive Briefing", icon: FileText },
   ];
 
@@ -319,10 +322,13 @@ export default function MissionControlDashboard() {
               pypiPackages={data.pypiPackages}
               distributions={data.distributions}
               trafficData={data.trafficData}
+              trafficReferrers={data.trafficReferrers}
+              trafficPaths={data.trafficPaths}
               openVsx={data.openVsx}
               binaries={data.binaries}
             />
           )}
+          {activeTab === "intelligence" && <AdminIntelligenceTab data={data} />}
           {activeTab === "telemetry" && <TelemetryTab logs={data.telemetryLogs} />}
           {activeTab === "briefing" && <BriefingTab data={data} />}
           {activeTab === "monetization" && <MonetizationTab data={data} />}

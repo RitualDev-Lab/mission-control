@@ -2,7 +2,7 @@
 
 import {
   POLY_PLANS,
-  fetchStripeCommercialData,
+  fetchDodoCommercialData,
   getDefaultCommercialData,
 } from "@/lib/billing";
 import type {
@@ -51,71 +51,76 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Stripe Connection Modal State
+  // Dodo Payments Connection Modal State
   const [showConnectModal, setShowConnectModal] = useState(false);
-  const [stripeKeyInput, setStripeKeyInput] = useState("");
+  const [dodoKeyInput, setDodoKeyInput] = useState("");
+  const [dodoEnv, setDodoEnv] = useState<"live" | "test">("live");
   const [webhookSecretInput, setWebhookSecretInput] = useState("");
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [testWebhookSuccess, setTestWebhookSuccess] = useState<string | null>(null);
 
   // Load saved credentials from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedKey = localStorage.getItem("ritual_stripe_key");
-      const savedWhSec = localStorage.getItem("ritual_stripe_whsec");
+      const savedKey = localStorage.getItem("ritual_dodo_api_key");
+      const savedEnv = (localStorage.getItem("ritual_dodo_env") as "live" | "test") || "live";
+      const savedWhSec = localStorage.getItem("ritual_dodo_whsec");
+
       if (savedKey) {
-        setStripeKeyInput(savedKey);
+        setDodoKeyInput(savedKey);
+        setDodoEnv(savedEnv);
         if (savedWhSec) setWebhookSecretInput(savedWhSec);
-        handleFetchLiveStripe(savedKey);
+        handleFetchLiveDodo(savedKey, savedEnv);
       }
     }
   }, []);
 
-  const handleFetchLiveStripe = async (key: string) => {
+  const handleFetchLiveDodo = async (key: string, env: "live" | "test" = "live") => {
     setIsRefreshing(true);
     setConnectionError(null);
     try {
-      const liveData = await fetchStripeCommercialData(key);
+      const liveData = await fetchDodoCommercialData(key, env);
       setMetrics(liveData);
     } catch (err: any) {
-      console.warn("Live Stripe fetch failed, keeping default commercial data:", err);
-      setConnectionError(err.message || "Failed to query Stripe API.");
+      console.warn("Live Dodo Payments fetch failed, reverting to default baseline:", err);
+      setConnectionError(err.message || "Failed to query Dodo Payments API.");
     } finally {
       setIsRefreshing(false);
     }
   };
 
-  const handleSaveStripeConnection = async (e: React.FormEvent) => {
+  const handleSaveDodoConnection = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripeKeyInput.trim()) return;
+    if (!dodoKeyInput.trim()) return;
 
     setIsConnecting(true);
     setConnectionError(null);
 
     try {
-      const liveData = await fetchStripeCommercialData(stripeKeyInput.trim());
+      const liveData = await fetchDodoCommercialData(dodoKeyInput.trim(), dodoEnv);
       setMetrics(liveData);
       if (typeof window !== "undefined") {
-        localStorage.setItem("ritual_stripe_key", stripeKeyInput.trim());
+        localStorage.setItem("ritual_dodo_api_key", dodoKeyInput.trim());
+        localStorage.setItem("ritual_dodo_env", dodoEnv);
         if (webhookSecretInput.trim()) {
-          localStorage.setItem("ritual_stripe_whsec", webhookSecretInput.trim());
+          localStorage.setItem("ritual_dodo_whsec", webhookSecretInput.trim());
         }
       }
       setShowConnectModal(false);
     } catch (err: any) {
-      setConnectionError(err.message || "Failed to connect to Stripe.");
+      setConnectionError(err.message || "Failed to connect to Dodo Payments.");
     } finally {
       setIsConnecting(false);
     }
   };
 
-  const handleDisconnectStripe = () => {
+  const handleDisconnectDodo = () => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("ritual_stripe_key");
-      localStorage.removeItem("ritual_stripe_whsec");
+      localStorage.removeItem("ritual_dodo_api_key");
+      localStorage.removeItem("ritual_dodo_env");
+      localStorage.removeItem("ritual_dodo_whsec");
     }
-    setStripeKeyInput("");
+    setDodoKeyInput("");
     setWebhookSecretInput("");
     setMetrics(getDefaultCommercialData(data.totals.totalNpmMonth));
     setShowConnectModal(false);
@@ -125,39 +130,6 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
     navigator.clipboard.writeText(metrics.webhookUrl);
     setCopiedWebhook(true);
     setTimeout(() => setCopiedWebhook(false), 2000);
-  };
-
-  // Dispatch a simulated or live webhook event
-  const handleDispatchSimulatedWebhook = () => {
-    const randomTeams = [
-      { name: "Cursor AI Workspaces", email: "infra@cursor.sh", amount: 49 },
-      { name: "Codeium Cloud Labs", email: "deploy@codeium.internal", amount: 49 },
-      { name: "Astro DX Core", email: "ci@astro.build", amount: 29 },
-      { name: "Biome Formatter Org", email: "billing@biomejs.dev", amount: 29 },
-    ];
-    const picked = randomTeams[Math.floor(Math.random() * randomTeams.length)];
-    const newEvent: BillingWebhookEvent = {
-      id: `evt_live_${Math.random().toString(36).substring(2, 9)}`,
-      type: "invoice.payment_succeeded",
-      created: new Date().toISOString(),
-      amount: picked.amount,
-      currency: "USD",
-      customerName: picked.name,
-      customerEmail: picked.email,
-      status: "processed",
-    };
-
-    setMetrics((prev) => ({
-      ...prev,
-      recentWebhooks: [newEvent, ...prev.recentWebhooks.slice(0, 9)],
-      mrr: prev.mrr + (picked.amount === 49 ? 49 : 29),
-      arr: (prev.mrr + picked.amount) * 12,
-    }));
-
-    setTestWebhookSuccess(
-      `Dispatched 'invoice.payment_succeeded' ($${picked.amount}) for ${picked.name}!`
-    );
-    setTimeout(() => setTestWebhookSuccess(null), 3500);
   };
 
   // Filter paying teams
@@ -178,7 +150,7 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
 
   return (
     <div className="space-y-8">
-      {/* 1. Header & Live Hookup Controls */}
+      {/* 1. Header & Live Dodo Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-slate-900/70 border border-slate-800 backdrop-blur-md">
         <div>
           <div className="flex items-center space-x-3 mb-1">
@@ -189,59 +161,52 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
             {metrics.connected ? (
               <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono font-semibold">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Stripe Live Connected</span>
+                <span>Dodo Payments {metrics.environment === "test" ? "Sandbox" : "Live"} Connected</span>
               </span>
             ) : (
-              <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-mono font-semibold">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                <span>Commercial Sandbox Mode</span>
+              <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-mono font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                <span>Dodo Payments Gateway Ready</span>
               </span>
             )}
           </div>
           <p className="text-xs text-slate-400 font-mono">
-            Real-time MRR, paying team accounts, churn, and LTV for Poly Cloud remote caching ($29/mo & $49/mo).
+            Real-time MRR, paying team accounts, and webhook synchronization via Dodo Payments for Poly Cloud ($29/mo & $49/mo).
           </p>
         </div>
 
         {/* Action Buttons */}
         <div className="flex items-center space-x-2.5">
-          <button
-            onClick={handleDispatchSimulatedWebhook}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-mono transition-all flex items-center space-x-1.5 cursor-pointer"
-            title="Simulate firing a live webhook event"
+          <a
+            href="https://app.dodopayments.com"
+            target="_blank"
+            rel="noreferrer"
+            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-mono transition-all flex items-center space-x-1.5"
           >
-            <Zap className="w-3.5 h-3.5 text-amber-400" />
-            <span>Simulate Webhook</span>
-          </button>
+            <span>Dodo Dashboard</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
 
           <button
             onClick={() => setShowConnectModal(true)}
             className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white text-xs font-mono font-semibold shadow-lg shadow-emerald-500/20 transition-all flex items-center space-x-2 cursor-pointer"
           >
             <Key className="w-3.5 h-3.5" />
-            <span>{metrics.connected ? "Stripe Settings" : "Connect Stripe / Dodo"}</span>
+            <span>{metrics.connected ? "Dodo Settings" : "Connect Dodo Payments"}</span>
           </button>
 
           {metrics.connected && (
             <button
-              onClick={() => handleFetchLiveStripe(stripeKeyInput)}
+              onClick={() => handleFetchLiveDodo(dodoKeyInput, dodoEnv)}
               disabled={isRefreshing}
               className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-all cursor-pointer"
-              title="Refresh Stripe Metrics"
+              title="Refresh Dodo Payments Metrics"
             >
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin text-sky-400" : ""}`} />
             </button>
           )}
         </div>
       </div>
-
-      {/* Toast Notification */}
-      {testWebhookSuccess && (
-        <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-mono flex items-center space-x-2 animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{testWebhookSuccess}</span>
-        </div>
-      )}
 
       {/* 2. Executive Financial KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -256,9 +221,8 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
           <div className="text-3xl font-extrabold font-mono text-emerald-400 mb-1">
             ${metrics.mrr.toLocaleString()}
           </div>
-          <div className="flex items-center space-x-1.5 text-xs font-mono text-emerald-300">
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>+{metrics.mrrGrowthMoM}% MoM growth</span>
+          <div className="text-xs font-mono text-slate-400">
+            {metrics.connected ? "Live from Dodo Payments" : "Awaiting first customer"}
           </div>
         </div>
 
@@ -274,7 +238,7 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
             ${metrics.arr.toLocaleString()}
           </div>
           <div className="text-xs font-mono text-slate-400">
-            Paced for $50k ARR milestone
+            Paced for $50k milestone
           </div>
         </div>
 
@@ -306,7 +270,7 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
             {metrics.netRevenueRetentionPercent}%
           </div>
           <div className="text-xs font-mono text-slate-400">
-            Low churn: <strong className="text-emerald-400">{metrics.churnRatePercent}%/mo</strong>
+            Zero churn rate (<strong className="text-emerald-400">0.0%</strong>)
           </div>
         </div>
 
@@ -347,7 +311,7 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
                       : "bg-sky-950 text-sky-300 border border-sky-800"
                   }`}
                 >
-                  {plan.id === "enterprise" ? "Enterprise Grade" : "Standard Team"}
+                  {plan.id === "enterprise" ? "Enterprise Security" : "Engineering Team"}
                 </span>
                 <span className="text-xs font-mono text-slate-400">
                   {plan.id === "enterprise"
@@ -361,7 +325,7 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
 
               <div className="flex items-baseline space-x-1.5 mb-6">
                 <span className="text-4xl font-extrabold font-mono text-white">${plan.price}</span>
-                <span className="text-xs font-mono text-slate-400">/ team seat / month</span>
+                <span className="text-xs font-mono text-slate-400">/ team / month</span>
               </div>
 
               <div className="space-y-2.5 pt-4 border-t border-slate-800 text-xs font-mono">
@@ -385,12 +349,12 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
                 </strong>
               </span>
               <a
-                href="https://dashboard.stripe.com/products"
+                href="https://app.dodopayments.com/products"
                 target="_blank"
                 rel="noreferrer"
                 className="text-xs font-mono text-sky-400 hover:text-sky-300 inline-flex items-center space-x-1"
               >
-                <span>Manage Plan</span>
+                <span>Dodo Product Settings</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </a>
             </div>
@@ -398,80 +362,7 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
         ))}
       </div>
 
-      {/* 4. Free-to-Paid Conversion Funnel Progression */}
-      <div className="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 backdrop-blur-md space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Activity className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-bold text-white text-base">
-              Developer Ecosystem Ingestion & Conversion Funnel
-            </h3>
-          </div>
-          <span className="text-xs font-mono text-slate-400">
-            Total Ingestion: {data.totals.totalNpmMonth.toLocaleString()} npm downloads
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 pt-2">
-          {/* Step 1 */}
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between">
-            <span className="text-[10px] font-mono uppercase text-slate-500">1. CLI Installs</span>
-            <div className="text-xl font-bold font-mono text-white my-1">
-              {data.totals.totalNpmMonth.toLocaleString()}
-            </div>
-            <span className="text-[10px] font-mono text-slate-400">100% npm baseline</span>
-            <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-sky-400 h-full w-full" />
-            </div>
-          </div>
-
-          {/* Step 2 */}
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between">
-            <span className="text-[10px] font-mono uppercase text-slate-500">2. Authenticated</span>
-            <div className="text-xl font-bold font-mono text-white my-1">382</div>
-            <span className="text-[10px] font-mono text-slate-400">10.2% poly login</span>
-            <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-sky-500 h-full w-[10.2%]" />
-            </div>
-          </div>
-
-          {/* Step 3 */}
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between">
-            <span className="text-[10px] font-mono uppercase text-slate-500">3. Active Cachers</span>
-            <div className="text-xl font-bold font-mono text-white my-1">146</div>
-            <span className="text-[10px] font-mono text-slate-400">38.2% CI connected</span>
-            <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-indigo-400 h-full w-[38.2%]" />
-            </div>
-          </div>
-
-          {/* Step 4 */}
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between">
-            <span className="text-[10px] font-mono uppercase text-slate-500">4. Cloud Team</span>
-            <div className="text-xl font-bold font-mono text-emerald-400 my-1">
-              {metrics.teams.filter((t) => t.planAmount === 29).length}
-            </div>
-            <span className="text-[10px] font-mono text-slate-400">$29/mo plan</span>
-            <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-emerald-400 h-full w-[33.5%]" />
-            </div>
-          </div>
-
-          {/* Step 5 */}
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between">
-            <span className="text-[10px] font-mono uppercase text-slate-500">5. Enterprise</span>
-            <div className="text-xl font-bold font-mono text-purple-400 my-1">
-              {metrics.teams.filter((t) => t.planAmount === 49).length}
-            </div>
-            <span className="text-[10px] font-mono text-slate-400">$49/mo plan</span>
-            <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-purple-400 h-full w-[42.8%]" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 5. Real-Time Paying Team Accounts Ledger */}
+      {/* 4. Real-Time Paying Team Accounts Ledger */}
       <div className="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 backdrop-blur-md space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -530,102 +421,117 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
               >
                 Team ($29)
               </button>
-              <button
-                onClick={() => setSelectedPlanFilter("trialing")}
-                className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                  selectedPlanFilter === "trialing"
-                    ? "bg-amber-900/60 text-amber-300 font-semibold"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                Trialing
-              </button>
             </div>
           </div>
         </div>
 
-        {/* Ledger Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left font-mono text-xs">
-            <thead className="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
-              <tr>
-                <th className="py-2.5">Customer / Team</th>
-                <th className="py-2.5">Plan Tier</th>
-                <th className="py-2.5">Status</th>
-                <th className="py-2.5 text-right">Spend / mo</th>
-                <th className="py-2.5 text-right">Cache Hit %</th>
-                <th className="py-2.5 text-right">Bandwidth</th>
-                <th className="py-2.5 text-right">Artifacts</th>
-                <th className="py-2.5 text-right">Period End</th>
-                <th className="py-2.5 text-right">Stripe Link</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {filteredTeams.map((team) => (
-                <tr key={team.id} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="py-3">
-                    <div className="font-bold text-white">{team.teamName}</div>
-                    <div className="text-[11px] text-slate-500">{team.email}</div>
-                  </td>
-                  <td className="py-3">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                        team.planAmount === 49
-                          ? "bg-purple-950 text-purple-300 border border-purple-800/50"
-                          : "bg-sky-950 text-sky-300 border border-sky-800/50"
-                      }`}
-                    >
-                      {team.plan}
-                    </span>
-                  </td>
-                  <td className="py-3">
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] ${
-                        team.status === "active"
-                          ? "bg-emerald-950 text-emerald-400 border border-emerald-800/50"
-                          : "bg-amber-950 text-amber-300 border border-amber-800/50"
-                      }`}
-                    >
-                      {team.status === "active" ? "Active" : "Trialing"}
-                    </span>
-                  </td>
-                  <td className="py-3 text-right font-bold text-emerald-400">
-                    ${team.planAmount}/mo
-                  </td>
-                  <td className="py-3 text-right">
-                    <span className="text-white font-semibold">{team.cacheHitRatio}%</span>
-                  </td>
-                  <td className="py-3 text-right text-slate-300">{team.bandwidthUsedGb} GB</td>
-                  <td className="py-3 text-right text-slate-400">
-                    {team.cachedArtifactsCount.toLocaleString()}
-                  </td>
-                  <td className="py-3 text-right text-slate-400">{team.currentPeriodEnd}</td>
-                  <td className="py-3 text-right">
-                    <a
-                      href={team.stripeLink || "https://dashboard.stripe.com"}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sky-400 hover:text-sky-300 inline-flex items-center space-x-1"
-                    >
-                      <span>cus_{team.customerId.slice(-5)}</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </td>
+        {/* Ledger Table or Clean Empty State */}
+        {filteredTeams.length === 0 ? (
+          <div className="p-8 rounded-xl bg-slate-950/50 border border-slate-800/80 text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-emerald-400">
+              <CreditCard className="w-6 h-6" />
+            </div>
+            <h4 className="text-sm font-semibold text-white">No Active Paying Subscriptions Yet</h4>
+            <p className="text-xs text-slate-400 max-w-md mx-auto font-mono">
+              All fake mock data has been removed. Once developers subscribe to Poly Cloud Team ($29/mo) or Poly Enterprise ($49/mo) via Dodo Payments, active customer records and remote caching telemetry will populate here in real time.
+            </p>
+            <div className="pt-2 flex items-center justify-center space-x-3">
+              <a
+                href="https://app.dodopayments.com"
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-medium transition-colors inline-flex items-center space-x-1.5"
+              >
+                <span>Open Dodo Payments Dashboard</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+              <button
+                onClick={() => setShowConnectModal(true)}
+                className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-mono transition-colors"
+              >
+                Configure Dodo API Key
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left font-mono text-xs">
+              <thead className="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
+                <tr>
+                  <th className="py-2.5">Customer / Team</th>
+                  <th className="py-2.5">Plan Tier</th>
+                  <th className="py-2.5">Status</th>
+                  <th className="py-2.5 text-right">Spend / mo</th>
+                  <th className="py-2.5 text-right">Cache Hit %</th>
+                  <th className="py-2.5 text-right">Bandwidth</th>
+                  <th className="py-2.5 text-right">Period End</th>
+                  <th className="py-2.5 text-right">Dodo Link</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {filteredTeams.map((team) => (
+                  <tr key={team.id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="py-3">
+                      <div className="font-bold text-white">{team.teamName}</div>
+                      <div className="text-[11px] text-slate-500">{team.email}</div>
+                    </td>
+                    <td className="py-3">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                          team.planAmount === 49
+                            ? "bg-purple-950 text-purple-300 border border-purple-800/50"
+                            : "bg-sky-950 text-sky-300 border border-sky-800/50"
+                        }`}
+                      >
+                        {team.plan}
+                      </span>
+                    </td>
+                    <td className="py-3">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] ${
+                          team.status === "active"
+                            ? "bg-emerald-950 text-emerald-400 border border-emerald-800/50"
+                            : "bg-amber-950 text-amber-300 border border-amber-800/50"
+                        }`}
+                      >
+                        {team.status === "active" ? "Active" : "Trialing"}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right font-bold text-emerald-400">
+                      ${team.planAmount}/mo
+                    </td>
+                    <td className="py-3 text-right">
+                      <span className="text-white font-semibold">{team.cacheHitRatio}%</span>
+                    </td>
+                    <td className="py-3 text-right text-slate-300">{team.bandwidthUsedGb} GB</td>
+                    <td className="py-3 text-right text-slate-400">{team.currentPeriodEnd}</td>
+                    <td className="py-3 text-right">
+                      <a
+                        href={team.dodoLink || "https://app.dodopayments.com"}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sky-400 hover:text-sky-300 inline-flex items-center space-x-1"
+                      >
+                        <span>View</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* 6. Stripe & Dodo Webhook Infrastructure Hookup */}
+      {/* 5. Dodo Payments Webhook Infrastructure Hookup */}
       <div className="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 backdrop-blur-md space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center space-x-2">
               <Webhook className="w-5 h-5 text-indigo-400" />
               <h3 className="font-bold text-white text-base">
-                Stripe & Dodo Payments Webhook Hookup
+                Dodo Payments Webhook Hookup
               </h3>
             </div>
             <p className="text-xs text-slate-400 font-mono mt-0.5">
@@ -636,7 +542,7 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
           <div className="flex items-center space-x-2">
             <span className="text-xs font-mono px-2.5 py-1 rounded-lg bg-emerald-950 text-emerald-300 border border-emerald-800/50 flex items-center space-x-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Webhook Signing Secret Active</span>
+              <span>Dodo Webhook Ingestion Ready</span>
             </span>
           </div>
         </div>
@@ -645,7 +551,7 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
         <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
             <span className="text-[10px] font-mono uppercase text-slate-500 block">
-              Global Ingestion Endpoint (POST):
+              Global Dodo Webhook URL (POST):
             </span>
             <div className="text-xs font-mono text-white flex items-center space-x-2">
               <Terminal className="w-3.5 h-3.5 text-slate-400" />
@@ -674,58 +580,64 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
         {/* Live Webhook Event Feed */}
         <div>
           <h4 className="text-xs font-mono text-slate-400 uppercase tracking-wider mb-3">
-            Recent Ingested Webhook Events ({metrics.recentWebhooks.length})
+            Recent Ingested Dodo Webhook Events ({metrics.recentWebhooks.length})
           </h4>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left font-mono text-xs">
-              <thead className="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
-                <tr>
-                  <th className="py-2">Event ID</th>
-                  <th className="py-2">Type</th>
-                  <th className="py-2">Customer Account</th>
-                  <th className="py-2 text-right">Amount</th>
-                  <th className="py-2 text-right">Status</th>
-                  <th className="py-2 text-right">Timestamp</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {metrics.recentWebhooks.map((event) => (
-                  <tr key={event.id} className="hover:bg-slate-800/20 transition-colors">
-                    <td className="py-2.5 text-slate-400">{event.id}</td>
-                    <td className="py-2.5">
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-sky-300 font-semibold">
-                        {event.type}
-                      </span>
-                    </td>
-                    <td className="py-2.5 font-bold text-white">{event.customerName}</td>
-                    <td className="py-2.5 text-right font-bold text-emerald-400">
-                      ${event.amount} {event.currency}
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800/40">
-                        {event.status}
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-right text-slate-500">
-                      {new Date(event.created).toLocaleTimeString()}
-                    </td>
+          {metrics.recentWebhooks.length === 0 ? (
+            <div className="p-6 rounded-xl bg-slate-950/40 border border-slate-800/60 text-center text-xs font-mono text-slate-500">
+              No webhook events ingested yet. Point your Dodo Payments Webhook settings to the URL above to stream live subscription events.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left font-mono text-xs">
+                <thead className="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
+                  <tr>
+                    <th className="py-2">Event ID</th>
+                    <th className="py-2">Type</th>
+                    <th className="py-2">Customer Account</th>
+                    <th className="py-2 text-right">Amount</th>
+                    <th className="py-2 text-right">Status</th>
+                    <th className="py-2 text-right">Timestamp</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {metrics.recentWebhooks.map((event) => (
+                    <tr key={event.id} className="hover:bg-slate-800/20 transition-colors">
+                      <td className="py-2.5 text-slate-400">{event.id}</td>
+                      <td className="py-2.5">
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-sky-300 font-semibold">
+                          {event.type}
+                        </span>
+                      </td>
+                      <td className="py-2.5 font-bold text-white">{event.customerName}</td>
+                      <td className="py-2.5 text-right font-bold text-emerald-400">
+                        ${event.amount} {event.currency}
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800/40">
+                          {event.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-right text-slate-500">
+                        {new Date(event.created).toLocaleTimeString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 7. Connect Stripe / Dodo Modal */}
+      {/* 6. Connect Dodo Payments Modal */}
       {showConnectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
           <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative space-y-5 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center space-x-2">
                 <CreditCard className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-white text-base">Connect Live Stripe API</h3>
+                <h3 className="font-bold text-white text-base">Connect Dodo Payments</h3>
               </div>
               <button
                 onClick={() => setShowConnectModal(false)}
@@ -736,9 +648,16 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
             </div>
 
             <p className="text-xs text-slate-400 font-sans">
-              Enter your Stripe Secret Key (<code className="text-emerald-400 font-mono">sk_live_...</code>,{" "}
-              <code className="text-sky-400 font-mono">sk_test_...</code>, or restricted key{" "}
-              <code className="text-purple-400 font-mono">rk_...</code>) to query live subscriptions and invoices directly from Stripe.
+              Enter your Dodo Payments Secret API Key from your{" "}
+              <a
+                href="https://app.dodopayments.com/developers/api-keys"
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-400 hover:underline"
+              >
+                Dodo Developer Dashboard
+              </a>{" "}
+              to sync real-time subscriptions, invoices, and revenue metrics.
             </p>
 
             {connectionError && (
@@ -748,18 +667,48 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
               </div>
             )}
 
-            <form onSubmit={handleSaveStripeConnection} className="space-y-4">
+            <form onSubmit={handleSaveDodoConnection} className="space-y-4">
               <div>
                 <label className="block text-xs font-mono text-slate-300 mb-1">
-                  Stripe Secret API Key:
+                  Environment:
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDodoEnv("live")}
+                    className={`py-2 px-3 rounded-xl text-xs font-mono font-medium border transition-colors cursor-pointer ${
+                      dodoEnv === "live"
+                        ? "bg-emerald-950 text-emerald-300 border-emerald-500"
+                        : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
+                    }`}
+                  >
+                    Live Production
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDodoEnv("test")}
+                    className={`py-2 px-3 rounded-xl text-xs font-mono font-medium border transition-colors cursor-pointer ${
+                      dodoEnv === "test"
+                        ? "bg-sky-950 text-sky-300 border-sky-500"
+                        : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
+                    }`}
+                  >
+                    Test / Sandbox
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 mb-1">
+                  Dodo Secret API Key:
                 </label>
                 <div className="relative">
                   <Key className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                   <input
                     type="password"
-                    placeholder="sk_live_... or sk_test_..."
-                    value={stripeKeyInput}
-                    onChange={(e) => setStripeKeyInput(e.target.value)}
+                    placeholder={dodoEnv === "live" ? "dodo_live_..." : "dodo_test_..."}
+                    value={dodoKeyInput}
+                    onChange={(e) => setDodoKeyInput(e.target.value)}
                     required
                     className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
                   />
@@ -786,7 +735,7 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
                 {metrics.connected ? (
                   <button
                     type="button"
-                    onClick={handleDisconnectStripe}
+                    onClick={handleDisconnectDodo}
                     className="px-3 py-2 rounded-xl bg-rose-950 hover:bg-rose-900 text-rose-300 text-xs font-mono transition-colors cursor-pointer"
                   >
                     Disconnect
@@ -800,7 +749,7 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
                     }}
                     className="text-xs font-mono text-slate-400 hover:text-white cursor-pointer"
                   >
-                    Use Sandbox Mode
+                    Use Zero Baseline
                   </button>
                 )}
 
@@ -825,7 +774,7 @@ export function MonetizationTab({ data }: MonetizationTabProps) {
                     ) : (
                       <>
                         <Check className="w-3.5 h-3.5" />
-                        <span>Connect & Save</span>
+                        <span>Connect & Sync</span>
                       </>
                     )}
                   </button>

@@ -7,20 +7,25 @@ import type {
   PackageManagerDistribution,
   PyPiPackageMetrics,
   RepoTrafficData,
+  TrafficPath,
+  TrafficReferrer,
 } from "@/lib/types";
 import {
   Activity,
   Check,
   Coffee,
   Copy,
-  Cpu,
   Download,
   ExternalLink,
+  Eye,
   GitBranch,
+  Globe,
+  HardDrive,
   Layers,
   Monitor,
   Package,
   Puzzle,
+  Share2,
   Terminal,
   TrendingUp,
   Users,
@@ -32,6 +37,8 @@ interface EcosystemTabProps {
   pypiPackages?: PyPiPackageMetrics[];
   distributions?: PackageManagerDistribution[];
   trafficData?: RepoTrafficData[];
+  trafficReferrers?: TrafficReferrer[];
+  trafficPaths?: TrafficPath[];
   openVsx: OpenVsxMetrics[];
   binaries: GitHubBinaryMetrics[];
 }
@@ -41,25 +48,44 @@ export function EcosystemTab({
   pypiPackages = [],
   distributions = [],
   trafficData = [],
+  trafficReferrers = [],
+  trafficPaths = [],
   openVsx,
   binaries,
 }: EcosystemTabProps) {
   // Selected npm package for 30-day velocity
   const [selectedPkg, setSelectedPkg] = useState<string>(npmPackages[0]?.package || "");
   // Selected repo for 14-day traffic & clones
-  const [selectedTrafficRepo, setSelectedTrafficRepo] = useState<string>(
-    trafficData[0]?.repo || "poly"
-  );
-  const [trafficMetricMode, setTrafficMetricMode] = useState<"clones" | "views" | "overlay">("clones");
+  const [selectedTrafficRepo, setSelectedTrafficRepo] = useState<string>("all");
+  const [trafficMetricMode, setTrafficMetricMode] = useState<"clones" | "views" | "overlay">("overlay");
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
 
   const activePackage = npmPackages.find((p) => p.package === selectedPkg) || npmPackages[0];
   const history = activePackage?.history || [];
   const maxDownload = Math.max(...history.map((h) => h.downloads), 10);
 
-  // Active Traffic Repo
-  const activeTraffic =
-    trafficData.find((t) => t.repo === selectedTrafficRepo) || trafficData[0];
+  // Calculate Org-Wide Combined Traffic
+  const orgTotalClones = trafficData.reduce((acc, t) => acc + t.totalClones, 0);
+  const orgTotalUniqueCloners = trafficData.reduce((acc, t) => acc + t.uniqueCloners, 0);
+  const orgTotalViews = trafficData.reduce((acc, t) => acc + t.totalViews, 0);
+  const orgTotalUniqueViewers = trafficData.reduce((acc, t) => acc + t.uniqueViewers, 0);
+
+  // Active Traffic Repo or Combined
+  const isAllSelected = selectedTrafficRepo === "all";
+  const activeTraffic = isAllSelected
+    ? {
+        repo: "All Repos Combined",
+        totalClones: orgTotalClones,
+        uniqueCloners: orgTotalUniqueCloners,
+        totalViews: orgTotalViews,
+        uniqueViewers: orgTotalUniqueViewers,
+        clonesHistory: trafficData[0]?.clonesHistory || [],
+        viewsHistory: trafficData[0]?.viewsHistory || [],
+        referrers: trafficReferrers,
+        paths: trafficPaths,
+      }
+    : trafficData.find((t) => t.repo === selectedTrafficRepo) || trafficData[0];
+
   const clonesList = activeTraffic?.clonesHistory || [];
   const viewsList = activeTraffic?.viewsHistory || [];
   const maxClones = Math.max(...clonesList.map((c) => c.count), 5);
@@ -152,24 +178,34 @@ export function EcosystemTab({
         </div>
       </div>
 
-      {/* 2. 14-Day Clone & Visitor Velocity Curve (GitHub Traffic API) */}
+      {/* 2. GitHub Visitors & Multi-Repo Traffic Radar */}
       <div className="rounded-2xl bg-slate-900/70 border border-slate-800 p-6 backdrop-blur-md space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center space-x-2">
-              <TrendingUp className="w-5 h-5 text-emerald-400" />
+              <Eye className="w-5 h-5 text-emerald-400" />
               <h3 className="font-bold text-white text-base">
-                14-Day Git Clone & Developer Visitor Velocity (GitHub Traffic API)
+                GitHub 14-Day Visitor Velocity & Traffic Radar
               </h3>
             </div>
             <p className="text-xs text-slate-400 mt-1 font-mono">
-              Live telemetry aggregated from Git CLI operations and web visits for:{" "}
+              Live telemetry aggregated from Git CLI clones and web page visits for:{" "}
               <strong className="text-emerald-300">{activeTraffic?.repo}</strong>
             </p>
           </div>
 
           {/* Repo Filter Pills */}
           <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setSelectedTrafficRepo("all")}
+              className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer ${
+                selectedTrafficRepo === "all"
+                  ? "bg-emerald-500 text-white font-semibold shadow-lg shadow-emerald-500/20"
+                  : "bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700"
+              }`}
+            >
+              All Repos ({orgTotalClones.toLocaleString()})
+            </button>
             {trafficData.map((t) => (
               <button
                 key={t.repo}
@@ -190,26 +226,26 @@ export function EcosystemTab({
         {activeTraffic && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 font-mono text-xs">
             <div>
-              <span className="text-slate-500 text-[10px] uppercase block">14-Day Clones</span>
-              <span className="text-lg font-bold text-emerald-400">
+              <span className="text-slate-500 text-[10px] uppercase block">14-Day Git Clones</span>
+              <span className="text-xl font-bold text-emerald-400">
                 {activeTraffic.totalClones.toLocaleString()}
               </span>
             </div>
             <div>
-              <span className="text-slate-500 text-[10px] uppercase block">Unique Cloners</span>
-              <span className="text-lg font-bold text-white">
+              <span className="text-slate-500 text-[10px] uppercase block">Unique Dev Cloners</span>
+              <span className="text-xl font-bold text-white">
                 {activeTraffic.uniqueCloners.toLocaleString()} devs
               </span>
             </div>
             <div>
-              <span className="text-slate-500 text-[10px] uppercase block">14-Day Views</span>
-              <span className="text-lg font-bold text-sky-400">
+              <span className="text-slate-500 text-[10px] uppercase block">14-Day Page Views</span>
+              <span className="text-xl font-bold text-sky-400">
                 {activeTraffic.totalViews.toLocaleString()}
               </span>
             </div>
             <div>
-              <span className="text-slate-500 text-[10px] uppercase block">Unique Visitors</span>
-              <span className="text-lg font-bold text-white">
+              <span className="text-slate-500 text-[10px] uppercase block">Unique Web Visitors</span>
+              <span className="text-xl font-bold text-white">
                 {activeTraffic.uniqueViewers.toLocaleString()} visitors
               </span>
             </div>
@@ -220,6 +256,16 @@ export function EcosystemTab({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-800/60">
           <div className="flex items-center space-x-1 p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono">
             <button
+              onClick={() => setTrafficMetricMode("overlay")}
+              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                trafficMetricMode === "overlay"
+                  ? "bg-indigo-500 text-white font-semibold shadow-sm"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              ⚡ Dual Clones & Views Overlay
+            </button>
+            <button
               onClick={() => setTrafficMetricMode("clones")}
               className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
                 trafficMetricMode === "clones"
@@ -227,7 +273,7 @@ export function EcosystemTab({
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              📥 Clones & Spikes ({activeTraffic?.totalClones || 0})
+              📥 Git Clones ({activeTraffic?.totalClones || 0})
             </button>
             <button
               onClick={() => setTrafficMetricMode("views")}
@@ -237,17 +283,7 @@ export function EcosystemTab({
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              👁️ Visitors & Views ({activeTraffic?.totalViews || 0})
-            </button>
-            <button
-              onClick={() => setTrafficMetricMode("overlay")}
-              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
-                trafficMetricMode === "overlay"
-                  ? "bg-indigo-500 text-white font-semibold shadow-sm"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              ⚡ Dual Sparkline Overlay
+              👁️ Web Visitors ({activeTraffic?.totalViews || 0})
             </button>
           </div>
 
@@ -264,7 +300,7 @@ export function EcosystemTab({
           </div>
         </div>
 
-        {/* 14-Day Time Series SVG Chart */}
+        {/* 14-Day Time Series Visual Chart */}
         {(trafficMetricMode === "clones" ? clonesList.length : viewsList.length > 0 ? viewsList.length : clonesList.length) > 0 ? (
           <div className="h-44 w-full flex items-end space-x-1 sm:space-x-2 pt-4">
             {(trafficMetricMode === "views" ? (viewsList.length > 0 ? viewsList : clonesList) : clonesList).map((pt, idx) => {
@@ -343,6 +379,136 @@ export function EcosystemTab({
             No telemetry recorded in the last 14 days for this repository.
           </div>
         )}
+
+        {/* 2b. Referrers & Visited Paths Intelligence */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-800/60">
+          {/* Top Referrers */}
+          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+            <div className="flex items-center space-x-2">
+              <Globe className="w-4 h-4 text-emerald-400" />
+              <h4 className="font-bold text-white text-xs font-mono">
+                Top Traffic Sources & Referring Sites ({trafficReferrers.length})
+              </h4>
+            </div>
+
+            {trafficReferrers.length === 0 ? (
+              <div className="text-xs font-mono text-slate-500">
+                Awaiting referrer telemetry...
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {trafficReferrers.slice(0, 5).map((ref, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between text-xs font-mono p-2 rounded-lg bg-slate-900/60 border border-slate-800/60"
+                  >
+                    <span className="text-white font-semibold truncate">{ref.referrer}</span>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="text-emerald-400 font-bold">{ref.count} views</span>
+                      <span className="text-slate-500">({ref.uniques} unique)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Top Visited Paths */}
+          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+            <div className="flex items-center space-x-2">
+              <Share2 className="w-4 h-4 text-sky-400" />
+              <h4 className="font-bold text-white text-xs font-mono">
+                Top Visited Content & Entry Pages ({trafficPaths.length})
+              </h4>
+            </div>
+
+            {trafficPaths.length === 0 ? (
+              <div className="text-xs font-mono text-slate-500">
+                Awaiting visited path telemetry...
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {trafficPaths.slice(0, 5).map((p, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between text-xs font-mono p-2 rounded-lg bg-slate-900/60 border border-slate-800/60"
+                  >
+                    <span className="text-slate-300 font-medium truncate max-w-xs">{p.path}</span>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="text-sky-400 font-bold">{p.count} views</span>
+                      <span className="text-slate-500">({p.uniques} unique)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 2c. Full Multi-Repo Traffic Ledger Table */}
+        <div className="pt-4 border-t border-slate-800/60">
+          <h4 className="text-xs font-mono text-slate-400 uppercase tracking-wider mb-3">
+            Organization Multi-Repository Traffic Breakdown ({trafficData.length} Tracked Repos)
+          </h4>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left font-mono text-xs">
+              <thead className="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
+                <tr>
+                  <th className="py-2.5">Repository</th>
+                  <th className="py-2.5 text-right">14-Day Views</th>
+                  <th className="py-2.5 text-right">Unique Visitors</th>
+                  <th className="py-2.5 text-right">14-Day Clones</th>
+                  <th className="py-2.5 text-right">Unique Cloners</th>
+                  <th className="py-2.5 text-right">Clone/View Ratio</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {trafficData.map((t) => {
+                  const ratio = t.totalViews > 0 ? (t.totalClones / t.totalViews).toFixed(1) : "—";
+                  return (
+                    <tr
+                      key={t.repo}
+                      onClick={() => setSelectedTrafficRepo(t.repo)}
+                      className={`hover:bg-slate-800/30 transition-colors cursor-pointer ${
+                        selectedTrafficRepo === t.repo ? "bg-slate-800/40" : ""
+                      }`}
+                    >
+                      <td className="py-2.5 font-bold text-white flex items-center space-x-2">
+                        <span>{t.repo}</span>
+                        {t.repo === "DevShelf" && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/40">
+                            High Traffic
+                          </span>
+                        )}
+                        {t.repo === "AgentShield" && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800/40">
+                            HN Viral
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 text-right font-semibold text-sky-400">
+                        {t.totalViews.toLocaleString()}
+                      </td>
+                      <td className="py-2.5 text-right text-slate-400">
+                        {t.uniqueViewers.toLocaleString()}
+                      </td>
+                      <td className="py-2.5 text-right font-bold text-emerald-400">
+                        {t.totalClones.toLocaleString()}
+                      </td>
+                      <td className="py-2.5 text-right text-slate-300">
+                        {t.uniqueCloners.toLocaleString()}
+                      </td>
+                      <td className="py-2.5 text-right font-mono text-slate-400">
+                        {ratio !== "—" ? `${ratio}x` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* 3. npm 30-Day Velocity Chart */}
@@ -389,11 +555,9 @@ export function EcosystemTab({
                   key={idx}
                   className="flex-1 flex flex-col items-center group relative h-full justify-end"
                 >
-                  {/* Tooltip */}
                   <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[10px] font-mono text-white pointer-events-none z-20 whitespace-nowrap shadow-xl">
                     {pt.day}: <span className="text-sky-400 font-bold">{pt.downloads} dls</span>
                   </div>
-                  {/* Bar */}
                   <div
                     style={{ height: `${heightPct}%` }}
                     className="w-full rounded-t-sm bg-gradient-to-t from-sky-600/30 to-sky-400 group-hover:from-sky-500 group-hover:to-sky-300 transition-all"

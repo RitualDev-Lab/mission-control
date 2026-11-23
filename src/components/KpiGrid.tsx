@@ -4,11 +4,14 @@ import {
   ArrowUpRight,
   Code2,
   Download,
+  Eye,
   GitPullRequest,
+  Globe,
   Layers,
   Puzzle,
   ShieldCheck,
   Star,
+  Users,
 } from "lucide-react";
 
 interface KpiGridProps {
@@ -17,6 +20,17 @@ interface KpiGridProps {
 
 export function KpiGrid({ data }: KpiGridProps) {
   const cards = [
+    {
+      title: "GitHub Visitors & Traffic",
+      value: `${(data.totals.totalViews || 0).toLocaleString()} Views`,
+      subtext: `${(data.totals.totalClones || 0).toLocaleString()} clones • ${data.totals.totalUniqueVisitors || 0} unique visitors`,
+      icon: Eye,
+      color: "text-emerald-400",
+      bgGlow: "from-emerald-500/10",
+      borderColor: "border-emerald-500/20",
+      badge: "HN & Google",
+      badgeColor: "bg-emerald-950 text-emerald-400 border-emerald-800/60",
+    },
     {
       title: "npm Monthly Ingestion",
       value: data.totals.totalNpmMonth.toLocaleString(),
@@ -40,20 +54,9 @@ export function KpiGrid({ data }: KpiGridProps) {
       badgeColor: "bg-purple-950 text-purple-300 border-purple-800/60",
     },
     {
-      title: "Standalone Binaries",
-      value: data.totals.totalBinaryDownloads.toLocaleString(),
-      subtext: "Linux, macOS, Windows",
-      icon: Layers,
-      color: "text-amber-400",
-      bgGlow: "from-amber-500/10",
-      borderColor: "border-amber-500/20",
-      badge: "v0.6.1 Live",
-      badgeColor: "bg-amber-950 text-amber-300 border-amber-800/60",
-    },
-    {
       title: "Monitored Repositories",
       value: data.repos.length.toString(),
-      subtext: `${(data.totals.totalClones || 281).toLocaleString()} clones • ${data.totals.totalStars} stars`,
+      subtext: `${data.totals.totalStars} stars across ${data.repos.length} repos`,
       icon: Code2,
       color: "text-indigo-400",
       bgGlow: "from-indigo-500/10",
@@ -66,9 +69,9 @@ export function KpiGrid({ data }: KpiGridProps) {
       value: data.totals.totalOpenPrs.toString(),
       subtext: `${data.totals.totalOpenIssues} issues pending`,
       icon: GitPullRequest,
-      color: "text-emerald-400",
-      bgGlow: "from-emerald-500/10",
-      borderColor: "border-emerald-500/20",
+      color: "text-amber-400",
+      bgGlow: "from-amber-500/10",
+      borderColor: "border-amber-500/20",
       badge: data.totals.totalOpenPrs === 0 ? "Clean Queue" : "Review Needed",
       badgeColor:
         data.totals.totalOpenPrs === 0
