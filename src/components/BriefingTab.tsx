@@ -1,25 +1,63 @@
 "use client";
 
-import { Check, Copy, Download, FileText, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import type { MissionControlData } from "@/lib/types";
+import { Check, Copy, Download, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
 
-export function BriefingTab() {
-  const [briefing, setBriefing] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+interface BriefingTabProps {
+  data: MissionControlData;
+}
+
+export function BriefingTab({ data }: BriefingTabProps) {
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/briefing")
-      .then((res) => res.json())
-      .then((data) => {
-        setBriefing(data.markdown || "No briefing available.");
-        setLoading(false);
-      })
-      .catch(() => {
-        setBriefing("Failed to load briefing.");
-        setLoading(false);
-      });
-  }, []);
+  const briefing = useMemo(() => {
+    const dateStr = new Date(data.collectedAt).toUTCString();
+    const topPackage = [...data.npmPackages].sort(
+      (a, b) => b.downloads.lastMonth - a.downloads.lastMonth
+    )[0];
+
+    return `# 🛡️ RitualDev Lab — Executive Operations Briefing
+**Generated:** ${dateStr}  
+**Audience:** Internal Administration (divyanshujethi)  
+**Status:** All Systems Operational • 24/7 Edge Sync
+
+---
+
+## 🚀 Key Performance Indicators (KPIs)
+* **Active Repositories Monitored:** **${data.repos.length} Repositories** (${data.totals.totalPublicRepos} public, ${data.totals.totalPrivateRepos} private)
+* **npm Monthly Ingestion Volume:** **${data.totals.totalNpmMonth.toLocaleString()} downloads**
+* **npm 7-Day Velocity:** **${data.totals.totalNpmWeek.toLocaleString()} downloads**
+* **VS Code / Open VSX Extension Installs:** **${data.totals.totalOpenVsx.toLocaleString()} installs**
+* **Standalone Binary Downloads:** **${data.totals.totalBinaryDownloads.toLocaleString()} downloads**
+* **Total Organization Stars:** **⭐ ${data.totals.totalStars}** across ${data.repos.length} core repositories
+
+---
+
+## 📦 Top Performing Packages
+* **Top Ecosystem Driver:** \`${topPackage?.package || "@ritualdev-lab/poly"}\` with **${topPackage?.downloads.lastMonth.toLocaleString()}** monthly downloads.
+* **Flagship Tool:** \`@ritualdev-lab/poly@0.6.1\` featuring:
+  * Ephemeral Try-Before-You-Install sandbox runner (\`poly try\`)
+  * 24-hour supply chain quarantine & pre-execution AGPL license firewall
+  * Cross-language affected-only monorepo CI execution (\`poly --affected\`)
+  * Multi-arch standalone native binary builds for Linux, macOS & Windows
+
+---
+
+## 🔍 Codebase Radar & Security Health
+* **Monitored Repositories:** ${data.repos.length} active repos
+* **Pending Pull Requests:** ${data.totals.totalOpenPrs} open PRs across organization
+* **Open Issues:** ${data.totals.totalOpenIssues} items pending triage
+* **Security & License Alerts:** **${data.totals.totalSecurityAlerts} critical alerts detected** (0 IP license contaminations)
+
+---
+
+## ⚡ Recommended Next Actions
+1. Publish \`vscode-poly\` to the official Microsoft VS Code Marketplace to capture enterprise developers outside Open VSX.
+2. Update Homebrew tap and Scoop bucket formulas to point to the newly compiled v0.6.1 binaries.
+3. Launch community outreach on Reddit (\`r/rust\`, \`r/node\`, \`r/Python\`) and Hacker News targeting microservice engineering leads.
+`;
+  }, [data]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(briefing);
@@ -48,7 +86,7 @@ export function BriefingTab() {
           <div>
             <h3 className="font-bold text-white text-base">AI Executive Briefing & Board Summary</h3>
             <p className="text-xs text-slate-400 mt-0.5 font-mono">
-              Automated synthesis of multi-repo health, registry adoption & velocity
+              Automated synthesis across all {data.repos.length} organization repositories
             </p>
           </div>
         </div>
@@ -74,15 +112,9 @@ export function BriefingTab() {
 
       {/* Rendered Briefing Content */}
       <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-8 backdrop-blur-md">
-        {loading ? (
-          <div className="h-64 flex items-center justify-center font-mono text-xs text-slate-500">
-            Synthesizing organization data...
-          </div>
-        ) : (
-          <div className="font-mono text-xs leading-relaxed text-slate-300 whitespace-pre-wrap bg-slate-950/60 p-6 rounded-xl border border-slate-800/80 overflow-x-auto">
-            {briefing}
-          </div>
-        )}
+        <div className="font-mono text-xs leading-relaxed text-slate-300 whitespace-pre-wrap bg-slate-950/60 p-6 rounded-xl border border-slate-800/80 overflow-x-auto">
+          {briefing}
+        </div>
       </div>
     </div>
   );

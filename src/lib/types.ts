@@ -9,6 +9,9 @@ export interface OrgRepoSummary {
   defaultBranch: string;
   updatedAt: string;
   htmlUrl: string;
+  isPrivate: boolean;
+  language: string;
+  category: "devtools" | "security" | "governance" | "infrastructure" | "mcp" | "other";
   ciStatus?: "success" | "failure" | "in_progress" | "unknown";
   latestCommit?: {
     message: string;
@@ -104,5 +107,7 @@ export interface MissionControlData {
     totalOpenPrs: number;
     totalOpenIssues: number;
     totalSecurityAlerts: number;
+    totalPublicRepos: number;
+    totalPrivateRepos: number;
   };
 }
