@@ -248,6 +248,28 @@ export interface BillingWebhookEvent {
   status: "processed" | "delivered" | "failed";
 }
 
+export interface DodoProductItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  isRecurring: boolean;
+  type?: string;
+  checkoutUrl?: string;
+}
+
+export interface DodoPaymentTransaction {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  customerName: string;
+  customerEmail: string;
+  createdAt: string;
+  invoiceUrl?: string;
+}
+
 export interface CommercializationMetrics {
   provider: "dodo" | "sandbox";
   connected: boolean;
@@ -267,6 +289,9 @@ export interface CommercializationMetrics {
   mrrGrowthMoM: number;
   teams: PayingTeamAccount[];
   recentWebhooks: BillingWebhookEvent[];
+  products?: DodoProductItem[];
+  transactions?: DodoPaymentTransaction[];
+  customersCount?: number;
 }
 
 export interface MissionControlData {
