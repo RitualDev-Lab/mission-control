@@ -44,6 +44,38 @@ export interface RepoIssue {
   labels: string[];
 }
 
+export interface TriagerItem {
+  id: number;
+  number: number;
+  title: string;
+  repo: string;
+  isPR: boolean;
+  author: string;
+  authorAvatar: string;
+  htmlUrl: string;
+  createdAt: string;
+  updatedAt: string;
+  state: string;
+  commentsCount: number;
+  labels: { name: string; color: string }[];
+  isDependabot: boolean;
+  ageDays: number;
+  isStale: boolean;
+}
+
+export interface WorkflowDispatchOption {
+  repo: string;
+  workflowId: string;
+  workflowName: string;
+  description: string;
+  inputs?: {
+    name: string;
+    description: string;
+    defaultValue?: string;
+    required?: boolean;
+  }[];
+}
+
 export interface NpmPackageMetrics {
   package: string;
   latestVersion: string;

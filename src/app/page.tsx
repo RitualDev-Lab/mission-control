@@ -2,11 +2,13 @@
 
 import { BriefingTab } from "@/components/BriefingTab";
 import { EcosystemTab } from "@/components/EcosystemTab";
+import { FleetTab } from "@/components/FleetTab";
 import { Header } from "@/components/Header";
 import { KpiGrid } from "@/components/KpiGrid";
 import { RadarTab } from "@/components/RadarTab";
 import { SecurityTab } from "@/components/SecurityTab";
 import { TelemetryTab } from "@/components/TelemetryTab";
+import { TriagerTab } from "@/components/TriagerTab";
 import { fetchFullMissionControlData } from "@/lib/github";
 import type { MissionControlData } from "@/lib/types";
 import {
@@ -15,16 +17,26 @@ import {
   Calculator,
   Download,
   FileText,
+  Inbox,
   KeyRound,
   Lock,
   Radio,
+  Rocket,
   ShieldCheck,
   Sparkles,
   Terminal,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-type TabKey = "radar" | "ecosystem" | "security" | "telemetry" | "briefing" | "monetization";
+type TabKey =
+  | "radar"
+  | "fleet"
+  | "triager"
+  | "security"
+  | "ecosystem"
+  | "telemetry"
+  | "briefing"
+  | "monetization";
 
 export default function MissionControlDashboard() {
   const [data, setData] = useState<MissionControlData | null>(null);
@@ -222,8 +234,10 @@ export default function MissionControlDashboard() {
 
   const tabs = [
     { key: "radar" as TabKey, label: "Code Radar", count: data.repos.length, icon: Radio },
-    { key: "ecosystem" as TabKey, label: "Registries & Downloads", count: data.totals.totalNpmMonth, icon: Download },
+    { key: "fleet" as TabKey, label: "Release Dispatcher", icon: Rocket },
+    { key: "triager" as TabKey, label: "Issue Triager", count: data.totals.totalOpenIssues, icon: Inbox },
     { key: "security" as TabKey, label: "Security & IP Gate", count: data.totals.totalSecurityAlerts, icon: ShieldCheck },
+    { key: "ecosystem" as TabKey, label: "Registries & Downloads", count: data.totals.totalNpmMonth, icon: Download },
     { key: "telemetry" as TabKey, label: "Live CI & Telemetry", count: data.telemetryLogs.length, icon: Activity },
     { key: "monetization" as TabKey, label: "Revenue & Conversion", icon: Calculator },
     { key: "briefing" as TabKey, label: "AI Executive Briefing", icon: FileText },
@@ -282,6 +296,21 @@ export default function MissionControlDashboard() {
         {/* Tab Content */}
         <div>
           {activeTab === "radar" && <RadarTab repos={data.repos} />}
+          {activeTab === "fleet" && (
+            <FleetTab
+              repos={data.repos}
+              onRefresh={() => checkAuthAndLoad(undefined, true)}
+            />
+          )}
+          {activeTab === "triager" && (
+            <TriagerTab onRefresh={() => checkAuthAndLoad(undefined, true)} />
+          )}
+          {activeTab === "security" && (
+            <SecurityTab
+              repos={data.repos}
+              onRefresh={() => checkAuthAndLoad(undefined, true)}
+            />
+          )}
           {activeTab === "ecosystem" && (
             <EcosystemTab
               npmPackages={data.npmPackages}
@@ -289,7 +318,6 @@ export default function MissionControlDashboard() {
               binaries={data.binaries}
             />
           )}
-          {activeTab === "security" && <SecurityTab repos={data.repos} />}
           {activeTab === "telemetry" && <TelemetryTab logs={data.telemetryLogs} />}
           {activeTab === "briefing" && <BriefingTab data={data} />}
           {activeTab === "monetization" && (

@@ -8,6 +8,8 @@ import type {
   RepoPullRequest,
   RepoTrafficSummary,
   TelemetryCrashLog,
+  TriagerItem,
+  WorkflowDispatchOption,
   WorkflowRunTelemetry,
 } from "./types";
 
@@ -453,4 +455,278 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
       totalViews: traffic.viewsCount,
     },
   };
+}
+
+// ==========================================
+// FLEET MANAGEMENT & 1-CLICK OPERATIONS
+// ==========================================
+
+export async function fetchDependabotPRs(token: string): Promise<any[]> {
+  const headers = {
+    "User-Agent": "RitualDev-Mission-Control",
+    Authorization: `token ${token}`,
+    Accept: "application/vnd.github.v3+json",
+  };
+  try {
+    const res = await fetch(
+      `https://api.github.com/search/issues?q=org:${ORG_NAME}+type:pr+state:open+author:app/dependabot&per_page=50`,
+      { headers }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.items || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function autoMergeDependabotPRs(
+  token: string,
+  onProgress?: (message: string) => void
+): Promise<{ merged: number; failed: number; skipped: number; logs: string[] }> {
+  const logs: string[] = [];
+  const log = (msg: string) => {
+    logs.push(msg);
+    if (onProgress) onProgress(msg);
+  };
+
+  log(`[SCAN] Initializing fleet-wide Dependabot PR discovery across ${ORG_NAME}...`);
+  const prs = await fetchDependabotPRs(token);
+  log(`[SCAN] Discovered ${prs.length} open Dependabot PRs.`);
+
+  let merged = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  const headers = {
+    "User-Agent": "RitualDev-Mission-Control",
+    Authorization: `token ${token}`,
+    Accept: "application/vnd.github.v3+json",
+    "Content-Type": "application/json",
+  };
+
+  for (const pr of prs) {
+    const repo = pr.repository_url.split("/").pop();
+    const number = pr.number;
+    log(`[INSPECT] ${repo} #${number}: "${pr.title}"`);
+
+    try {
+      // 1. Fetch detailed PR state
+      const detailRes = await fetch(
+        `https://api.github.com/repos/${ORG_NAME}/${repo}/pulls/${number}`,
+        { headers }
+      );
+      if (!detailRes.ok) {
+        log(`[SKIP] Could not fetch details for ${repo} #${number}`);
+        skipped++;
+        continue;
+      }
+
+      const detail = await detailRes.json();
+      if (detail.draft) {
+        log(`[SKIP] ${repo} #${number} is marked as draft.`);
+        skipped++;
+        continue;
+      }
+
+      if (detail.mergeable === false) {
+        log(`[CONFLICT] ${repo} #${number} has merge conflicts. Skipping.`);
+        skipped++;
+        continue;
+      }
+
+      // 2. Execute Squash Merge
+      const mergeRes = await fetch(
+        `https://api.github.com/repos/${ORG_NAME}/${repo}/pulls/${number}/merge`,
+        {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({
+            merge_method: "squash",
+            commit_title: `${pr.title} (#${number})`,
+          }),
+        }
+      );
+
+      if (mergeRes.ok) {
+        log(`[MERGED] Successfully squashed and merged ${repo} #${number}!`);
+        merged++;
+      } else {
+        const errData = await mergeRes.json().catch(() => ({}));
+        log(`[FAILED] Merge error on ${repo} #${number}: ${errData.message || mergeRes.statusText}`);
+        failed++;
+      }
+    } catch (err: any) {
+      log(`[ERROR] Exception processing ${repo} #${number}: ${err.message}`);
+      failed++;
+    }
+  }
+
+  log(`[COMPLETE] Finished fleet auto-merger. Merged: ${merged}, Failed: ${failed}, Skipped: ${skipped}.`);
+  return { merged, failed, skipped, logs };
+}
+
+export async function dispatchWorkflow(
+  token: string,
+  repo: string,
+  workflowId: string,
+  ref: string = "main",
+  inputs?: Record<string, any>
+): Promise<{ success: boolean; message: string }> {
+  const headers = {
+    "User-Agent": "RitualDev-Mission-Control",
+    Authorization: `token ${token}`,
+    Accept: "application/vnd.github.v3+json",
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${ORG_NAME}/${repo}/actions/workflows/${workflowId}/dispatches`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          ref,
+          inputs: inputs || {},
+        }),
+      }
+    );
+
+    if (res.status === 204) {
+      return {
+        success: true,
+        message: `Successfully dispatched workflow '${workflowId}' on repository ${repo} (${ref}).`,
+      };
+    } else {
+      const data = await res.json().catch(() => ({}));
+      return {
+        success: false,
+        message: data.message || `Dispatch returned status ${res.status}`,
+      };
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || "Failed to dispatch workflow.",
+    };
+  }
+}
+
+export async function fetchTriagerItems(token: string): Promise<TriagerItem[]> {
+  const headers = {
+    "User-Agent": "RitualDev-Mission-Control",
+    Authorization: `token ${token}`,
+    Accept: "application/vnd.github.v3+json",
+  };
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/search/issues?q=org:${ORG_NAME}+state:open&sort=created&order=desc&per_page=100`,
+      { headers }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    const items = data.items || [];
+
+    return items.map((item: any) => {
+      const repo = item.repository_url.split("/").pop();
+      const isPR = !!item.pull_request;
+      const isDependabot = (item.user?.login || "").toLowerCase().includes("dependabot");
+      const createdDate = new Date(item.created_at).getTime();
+      const ageDays = Math.max(0, Math.floor((Date.now() - createdDate) / (1000 * 60 * 60 * 24)));
+      const isStale = ageDays > 14;
+
+      return {
+        id: item.id,
+        number: item.number,
+        title: item.title,
+        repo,
+        isPR,
+        author: item.user?.login || "unknown",
+        authorAvatar: item.user?.avatar_url || "",
+        htmlUrl: item.html_url,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        state: item.state,
+        commentsCount: item.comments || 0,
+        labels: (item.labels || []).map((l: any) => ({
+          name: l.name,
+          color: l.color,
+        })),
+        isDependabot,
+        ageDays,
+        isStale,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function closeIssueOrPr(
+  token: string,
+  repo: string,
+  issueNumber: number
+): Promise<{ success: boolean; message: string }> {
+  const headers = {
+    "User-Agent": "RitualDev-Mission-Control",
+    Authorization: `token ${token}`,
+    Accept: "application/vnd.github.v3+json",
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${ORG_NAME}/${repo}/issues/${issueNumber}`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ state: "closed" }),
+      }
+    );
+
+    if (res.ok) {
+      return { success: true, message: `Successfully closed #${issueNumber} on ${repo}.` };
+    } else {
+      const data = await res.json().catch(() => ({}));
+      return { success: false, message: data.message || `Failed with status ${res.status}` };
+    }
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function mergeSinglePullRequest(
+  token: string,
+  repo: string,
+  prNumber: number,
+  method: "squash" | "merge" | "rebase" = "squash"
+): Promise<{ success: boolean; message: string }> {
+  const headers = {
+    "User-Agent": "RitualDev-Mission-Control",
+    Authorization: `token ${token}`,
+    Accept: "application/vnd.github.v3+json",
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${ORG_NAME}/${repo}/pulls/${prNumber}/merge`,
+      {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ merge_method: method }),
+      }
+    );
+
+    if (res.ok) {
+      return { success: true, message: `Successfully merged PR #${prNumber} into ${repo}.` };
+    } else {
+      const data = await res.json().catch(() => ({}));
+      return { success: false, message: data.message || `Merge failed (${res.status})` };
+    }
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
 }
