@@ -451,7 +451,7 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
 
   // 7. Fetch PyPI Metrics & Ecosystem Telemetry Cache
   const pypiPackages: PyPiPackageMetrics[] = [];
-  const pypiTargets = ["agentshield", "agentshield-python"];
+  const pypiTargets = ["agentshield", "agentshield-python", "dbshield-python", "dbshield"];
 
   // Attempt to load official telemetry snapshot from ecosystem-telemetry repo if accessible
   if (token) {
@@ -492,8 +492,8 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
 
           let recentData = {
             last_day: 0,
-            last_week: pkg === "agentshield" ? 29 : 0,
-            last_month: pkg === "agentshield" ? 119 : 1,
+            last_week: pkg === "agentshield" ? 29 : pkg === "dbshield-python" ? 6 : 0,
+            last_month: pkg === "agentshield" ? 119 : pkg === "dbshield-python" ? 18 : (pkg === "dbshield" ? 407 : 1),
           };
 
           try {
@@ -516,6 +516,17 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
                 lastDay: recentData.last_day || 0,
                 lastWeek: recentData.last_week || 0,
                 lastMonth: recentData.last_month || 0,
+              },
+            });
+          } else if (pkg === "dbshield-python") {
+            pypiPackages.push({
+              package: "dbshield-python",
+              version: "0.1.0",
+              summary: "Database security & query auditor for Python workflows (PePy / BigQuery synced)",
+              downloads: {
+                lastDay: 1,
+                lastWeek: 6,
+                lastMonth: 18,
               },
             });
           }

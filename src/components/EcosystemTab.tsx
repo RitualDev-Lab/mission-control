@@ -50,6 +50,7 @@ export function EcosystemTab({
   const [selectedTrafficRepo, setSelectedTrafficRepo] = useState<string>(
     trafficData[0]?.repo || "poly"
   );
+  const [trafficMetricMode, setTrafficMetricMode] = useState<"clones" | "views" | "overlay">("clones");
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
 
   const activePackage = npmPackages.find((p) => p.package === selectedPkg) || npmPackages[0];
@@ -60,7 +61,9 @@ export function EcosystemTab({
   const activeTraffic =
     trafficData.find((t) => t.repo === selectedTrafficRepo) || trafficData[0];
   const clonesList = activeTraffic?.clonesHistory || [];
+  const viewsList = activeTraffic?.viewsHistory || [];
   const maxClones = Math.max(...clonesList.map((c) => c.count), 5);
+  const maxViews = Math.max(...viewsList.map((v) => v.count), 5);
 
   const handleCopy = (cmd: string) => {
     navigator.clipboard.writeText(cmd);
@@ -213,24 +216,117 @@ export function EcosystemTab({
           </div>
         )}
 
+        {/* Interactive Sparkline Metric Mode Switcher */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-800/60">
+          <div className="flex items-center space-x-1 p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono">
+            <button
+              onClick={() => setTrafficMetricMode("clones")}
+              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                trafficMetricMode === "clones"
+                  ? "bg-emerald-500 text-white font-semibold shadow-sm"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              📥 Clones & Spikes ({activeTraffic?.totalClones || 0})
+            </button>
+            <button
+              onClick={() => setTrafficMetricMode("views")}
+              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                trafficMetricMode === "views"
+                  ? "bg-sky-500 text-white font-semibold shadow-sm"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              👁️ Visitors & Views ({activeTraffic?.totalViews || 0})
+            </button>
+            <button
+              onClick={() => setTrafficMetricMode("overlay")}
+              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                trafficMetricMode === "overlay"
+                  ? "bg-indigo-500 text-white font-semibold shadow-sm"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              ⚡ Dual Sparkline Overlay
+            </button>
+          </div>
+
+          <div className="text-xs font-mono text-slate-400">
+            {trafficMetricMode === "clones" && (
+              <span>Peak: <strong className="text-emerald-400">{maxClones} clones</strong>/day</span>
+            )}
+            {trafficMetricMode === "views" && (
+              <span>Peak: <strong className="text-sky-400">{maxViews} views</strong>/day</span>
+            )}
+            {trafficMetricMode === "overlay" && (
+              <span>Comparing <strong className="text-emerald-400">Clones</strong> & <strong className="text-sky-400">Page Views</strong></span>
+            )}
+          </div>
+        </div>
+
         {/* 14-Day Time Series SVG Chart */}
-        {clonesList.length > 0 ? (
+        {(trafficMetricMode === "clones" ? clonesList.length : viewsList.length > 0 ? viewsList.length : clonesList.length) > 0 ? (
           <div className="h-44 w-full flex items-end space-x-1 sm:space-x-2 pt-4">
-            {clonesList.map((pt, idx) => {
-              const heightPct = Math.max((pt.count / maxClones) * 100, 5);
+            {(trafficMetricMode === "views" ? (viewsList.length > 0 ? viewsList : clonesList) : clonesList).map((pt, idx) => {
+              const viewPt = viewsList[idx] || { count: 0, uniques: 0 };
               const dateLabel = pt.timestamp.split("T")[0].slice(5);
+
+              if (trafficMetricMode === "views") {
+                const heightPct = Math.max((pt.count / maxViews) * 100, 5);
+                return (
+                  <div key={idx} className="flex-1 flex flex-col items-center group relative h-full justify-end">
+                    <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-[10px] font-mono text-white pointer-events-none z-20 whitespace-nowrap shadow-xl">
+                      <span className="text-slate-400">{dateLabel}:</span>{" "}
+                      <strong className="text-sky-400">{pt.count} views</strong> ({pt.uniques} unique visitors)
+                    </div>
+                    <div
+                      style={{ height: `${heightPct}%` }}
+                      className="w-full rounded-t-sm bg-gradient-to-t from-sky-600/30 to-sky-400 group-hover:from-sky-500 group-hover:to-sky-300 transition-all"
+                    />
+                    <span className="text-[9px] font-mono text-slate-500 mt-2 truncate w-full text-center">
+                      {dateLabel}
+                    </span>
+                  </div>
+                );
+              }
+
+              if (trafficMetricMode === "overlay") {
+                const cloneHeight = Math.max((pt.count / Math.max(maxClones, 1)) * 100, 5);
+                const viewHeight = Math.max((viewPt.count / Math.max(maxViews, 1)) * 100, 5);
+                return (
+                  <div key={idx} className="flex-1 flex flex-col items-center group relative h-full justify-end">
+                    <div className="absolute -top-14 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-[10px] font-mono text-white pointer-events-none z-20 whitespace-nowrap shadow-xl">
+                      <span className="text-slate-400">{dateLabel}:</span>{" "}
+                      <span className="text-emerald-400 font-bold">{pt.count} clones</span> •{" "}
+                      <span className="text-sky-400 font-bold">{viewPt.count} views</span>
+                    </div>
+                    <div className="w-full flex items-end space-x-0.5 h-full">
+                      <div
+                        style={{ height: `${cloneHeight}%` }}
+                        className="flex-1 rounded-t-sm bg-gradient-to-t from-emerald-600/40 to-emerald-400 group-hover:from-emerald-500"
+                        title={`${pt.count} clones`}
+                      />
+                      <div
+                        style={{ height: `${viewHeight}%` }}
+                        className="flex-1 rounded-t-sm bg-gradient-to-t from-sky-600/40 to-sky-400 group-hover:from-sky-500"
+                        title={`${viewPt.count} views`}
+                      />
+                    </div>
+                    <span className="text-[9px] font-mono text-slate-500 mt-2 truncate w-full text-center">
+                      {dateLabel}
+                    </span>
+                  </div>
+                );
+              }
+
+              // Default "clones"
+              const heightPct = Math.max((pt.count / maxClones) * 100, 5);
               return (
-                <div
-                  key={idx}
-                  className="flex-1 flex flex-col items-center group relative h-full justify-end"
-                >
-                  {/* Tooltip */}
+                <div key={idx} className="flex-1 flex flex-col items-center group relative h-full justify-end">
                   <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-[10px] font-mono text-white pointer-events-none z-20 whitespace-nowrap shadow-xl">
                     <span className="text-slate-400">{dateLabel}:</span>{" "}
-                    <strong className="text-emerald-400">{pt.count} clones</strong> (
-                    {pt.uniques} unique)
+                    <strong className="text-emerald-400">{pt.count} clones</strong> ({pt.uniques} unique devs)
                   </div>
-                  {/* Bar */}
                   <div
                     style={{ height: `${heightPct}%` }}
                     className="w-full rounded-t-sm bg-gradient-to-t from-emerald-600/30 to-emerald-400 group-hover:from-emerald-500 group-hover:to-emerald-300 transition-all"
@@ -244,7 +340,7 @@ export function EcosystemTab({
           </div>
         ) : (
           <div className="h-36 flex items-center justify-center text-xs font-mono text-slate-500 border border-dashed border-slate-800 rounded-xl">
-            No Git clones recorded in the last 14 days for this repository.
+            No telemetry recorded in the last 14 days for this repository.
           </div>
         )}
       </div>
