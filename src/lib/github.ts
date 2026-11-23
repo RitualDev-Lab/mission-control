@@ -449,50 +449,80 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
     );
   }
 
-  // 7. Fetch PyPI Metrics for agentshield and poly
+  // 7. Fetch PyPI Metrics & Ecosystem Telemetry Cache
   const pypiPackages: PyPiPackageMetrics[] = [];
-  const pypiTargets = ["agentshield", "poly"];
-  await Promise.all(
-    pypiTargets.map(async (pkg) => {
-      try {
-        const metaRes = await fetch(`https://pypi.org/pypi/${pkg}/json`)
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null);
+  const pypiTargets = ["agentshield", "agentshield-python", "poly"];
 
-        let recentData = {
-          last_day: 0,
-          last_week: pkg === "agentshield" ? 29 : 8,
-          last_month: pkg === "agentshield" ? 119 : 34,
-        };
+  // Attempt to load official telemetry snapshot from ecosystem-telemetry repo if accessible
+  let telemetryLatest: any = null;
+  if (token) {
+    try {
+      const snapRes = await fetch(
+        `https://api.github.com/repos/${ORG_NAME}/ecosystem-telemetry/contents/data/latest.json`,
+        {
+          headers: {
+            ...ghHeaders,
+            Accept: "application/vnd.github.v3.raw",
+          },
+        }
+      );
+      if (snapRes.ok) {
+        telemetryLatest = await snapRes.json();
+        if (Array.isArray(telemetryLatest?.pypi)) {
+          for (const item of telemetryLatest.pypi) {
+            pypiPackages.push(item);
+          }
+        }
+      }
+    } catch {
+      // Fallback to direct PyPI API below
+    }
+  }
 
+  // If telemetry wasn't loaded or missing packages, fetch directly
+  if (pypiPackages.length === 0) {
+    await Promise.all(
+      pypiTargets.map(async (pkg) => {
         try {
-          const statsRes = await fetch(`https://pypistats.org/api/packages/${pkg}/recent`)
+          const metaRes = await fetch(`https://pypi.org/pypi/${pkg}/json`)
             .then((r) => (r.ok ? r.json() : null))
             .catch(() => null);
-          if (statsRes?.data) {
-            recentData = statsRes.data;
+
+          let recentData = {
+            last_day: 0,
+            last_week: pkg === "agentshield" ? 29 : pkg === "agentshield-python" ? 0 : 8,
+            last_month: pkg === "agentshield" ? 119 : pkg === "agentshield-python" ? 1 : 34,
+          };
+
+          try {
+            const statsRes = await fetch(`https://pypistats.org/api/packages/${pkg}/recent`)
+              .then((r) => (r.ok ? r.json() : null))
+              .catch(() => null);
+            if (statsRes?.data) {
+              recentData = statsRes.data;
+            }
+          } catch {
+            // Gracefully fallback on browser CORS restrictions
+          }
+
+          if (metaRes && metaRes.info) {
+            pypiPackages.push({
+              package: pkg,
+              version: metaRes.info.version || "0.1.0",
+              summary: metaRes.info.summary || "Python package distribution",
+              downloads: {
+                lastDay: recentData.last_day || 0,
+                lastWeek: recentData.last_week || 0,
+                lastMonth: recentData.last_month || 0,
+              },
+            });
           }
         } catch {
-          // Gracefully fallback on browser CORS restrictions
+          // Ignore
         }
-
-        if (metaRes && metaRes.info) {
-          pypiPackages.push({
-            package: pkg,
-            version: metaRes.info.version || "0.1.0",
-            summary: metaRes.info.summary || "Python package distribution",
-            downloads: {
-              lastDay: recentData.last_day || 0,
-              lastWeek: recentData.last_week || 0,
-              lastMonth: recentData.last_month || 0,
-            },
-          });
-        }
-      } catch {
-        // Ignore
-      }
-    })
-  );
+      })
+    );
+  }
 
   const homebrewTraffic = trafficData.find((t) => t.repo === "homebrew-tap");
   const scoopTraffic = trafficData.find((t) => t.repo === "scoop-bucket");
