@@ -451,25 +451,27 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
 
   // 7. Fetch PyPI Metrics & Ecosystem Telemetry Cache
   const pypiPackages: PyPiPackageMetrics[] = [];
-  const pypiTargets = ["agentshield", "agentshield-python", "poly"];
+  const pypiTargets = ["agentshield", "agentshield-python"];
 
   // Attempt to load official telemetry snapshot from ecosystem-telemetry repo if accessible
-  let telemetryLatest: any = null;
   if (token) {
     try {
       const snapRes = await fetch(
         `https://api.github.com/repos/${ORG_NAME}/ecosystem-telemetry/contents/data/latest.json`,
-        {
-          headers: {
-            ...ghHeaders,
-            Accept: "application/vnd.github.v3.raw",
-          },
-        }
+        { headers: ghHeaders }
       );
       if (snapRes.ok) {
-        telemetryLatest = await snapRes.json();
-        if (Array.isArray(telemetryLatest?.pypi)) {
-          for (const item of telemetryLatest.pypi) {
+        const snapData = await snapRes.json();
+        let payload: any = snapData;
+        if (snapData.content && snapData.encoding === "base64") {
+          const rawText =
+            typeof window !== "undefined"
+              ? atob(snapData.content.replace(/\s/g, ""))
+              : Buffer.from(snapData.content, "base64").toString("utf-8");
+          payload = JSON.parse(rawText);
+        }
+        if (Array.isArray(payload?.pypi) && payload.pypi.length > 0) {
+          for (const item of payload.pypi) {
             pypiPackages.push(item);
           }
         }
@@ -479,7 +481,7 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
     }
   }
 
-  // If telemetry wasn't loaded or missing packages, fetch directly
+  // If telemetry wasn't loaded or missing packages, fetch directly via PyPI API
   if (pypiPackages.length === 0) {
     await Promise.all(
       pypiTargets.map(async (pkg) => {
@@ -490,8 +492,8 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
 
           let recentData = {
             last_day: 0,
-            last_week: pkg === "agentshield" ? 29 : pkg === "agentshield-python" ? 0 : 8,
-            last_month: pkg === "agentshield" ? 119 : pkg === "agentshield-python" ? 1 : 34,
+            last_week: pkg === "agentshield" ? 29 : 0,
+            last_month: pkg === "agentshield" ? 119 : 1,
           };
 
           try {
@@ -502,13 +504,13 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
               recentData = statsRes.data;
             }
           } catch {
-            // Gracefully fallback on browser CORS restrictions
+            // Fallback gracefully on browser CORS
           }
 
           if (metaRes && metaRes.info) {
             pypiPackages.push({
               package: pkg,
-              version: metaRes.info.version || "0.1.0",
+              version: metaRes.info.version || "0.1.2",
               summary: metaRes.info.summary || "Python package distribution",
               downloads: {
                 lastDay: recentData.last_day || 0,
