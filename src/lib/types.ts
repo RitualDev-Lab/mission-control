@@ -144,19 +144,54 @@ export interface TelemetryCrashLog {
   status?: string;
 }
 
+export interface RepoTrafficData {
+  repo: string;
+  totalClones: number;
+  uniqueCloners: number;
+  totalViews: number;
+  uniqueViewers: number;
+  clonesHistory: { timestamp: string; count: number; uniques: number }[];
+  viewsHistory: { timestamp: string; count: number; uniques: number }[];
+}
+
+export interface PyPiPackageMetrics {
+  package: string;
+  version: string;
+  summary: string;
+  downloads: {
+    lastDay: number;
+    lastWeek: number;
+    lastMonth: number;
+  };
+}
+
+export interface PackageManagerDistribution {
+  name: "Homebrew" | "Scoop" | "npm" | "PyPI" | "Open VSX" | "GitHub Releases";
+  package: string;
+  installCommand: string;
+  totalInstalls: number;
+  uniqueUsers: number;
+  targetPlatform: "macOS / Linux" | "Windows" | "Node.js / Multi" | "Python" | "VS Code IDE" | "Native Multi-Arch";
+  badge: string;
+}
+
 export interface MissionControlData {
   collectedAt: string;
   org: string;
   repos: OrgRepoSummary[];
   npmPackages: NpmPackageMetrics[];
+  pypiPackages: PyPiPackageMetrics[];
+  distributions: PackageManagerDistribution[];
   openVsx: OpenVsxMetrics[];
   binaries: GitHubBinaryMetrics[];
   telemetryLogs: TelemetryCrashLog[];
   workflowRuns: WorkflowRunTelemetry[];
   traffic: RepoTrafficSummary;
+  trafficData: RepoTrafficData[];
   totals: {
     totalNpmMonth: number;
     totalNpmWeek: number;
+    totalPyPiMonth: number;
     totalOpenVsx: number;
     totalBinaryDownloads: number;
     totalStars: number;

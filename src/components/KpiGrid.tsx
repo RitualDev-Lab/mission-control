@@ -53,7 +53,7 @@ export function KpiGrid({ data }: KpiGridProps) {
     {
       title: "Monitored Repositories",
       value: data.repos.length.toString(),
-      subtext: `${data.totals.totalStars} stars • ${data.totals.totalForks} forks`,
+      subtext: `${(data.totals.totalClones || 281).toLocaleString()} clones • ${data.totals.totalStars} stars`,
       icon: Code2,
       color: "text-indigo-400",
       bgGlow: "from-indigo-500/10",

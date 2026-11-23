@@ -314,6 +314,9 @@ export default function MissionControlDashboard() {
           {activeTab === "ecosystem" && (
             <EcosystemTab
               npmPackages={data.npmPackages}
+              pypiPackages={data.pypiPackages}
+              distributions={data.distributions}
+              trafficData={data.trafficData}
               openVsx={data.openVsx}
               binaries={data.binaries}
             />
