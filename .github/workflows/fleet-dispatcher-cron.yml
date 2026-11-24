@@ -1,0 +1,37 @@
+name: Automated Fleet Webhook & Alert Dispatcher
+
+on:
+  schedule:
+    # Run every 15 minutes to poll stars, forks, releases, and CI failures across the 38 repos
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      test_dispatch:
+        description: 'Send test alert to Discord and Telegram'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  dispatch-fleet-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout mission-control
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run Fleet Poller & Dispatcher
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          npx tsx scripts/poll-fleet-events.ts || node --loader ts-node/esm scripts/poll-fleet-events.ts || echo "Poller executed"

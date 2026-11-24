@@ -591,7 +591,7 @@ export function EcosystemTab({
             </div>
             <div className="flex items-center space-x-2">
               <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60">
-                {pypiPackages.length} Packages Live
+                {pypiPackages.length} Packages Tracked
               </span>
               <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
                 {pypiPackages.reduce((acc, p) => acc + p.downloads.lastMonth, 0).toLocaleString()} DLs/mo
@@ -615,7 +615,20 @@ export function EcosystemTab({
               <tbody className="divide-y divide-slate-800/60">
                 {pypiPackages.map((pkg) => (
                   <tr key={pkg.package} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="py-3 font-bold text-amber-300">{pkg.package}</td>
+                    <td className="py-3 font-bold text-amber-300">
+                      <div className="flex items-center space-x-2">
+                        <span>{pkg.package}</span>
+                        {pkg.downloads.lastMonth === 0 ? (
+                          <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/50">
+                            Staged
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/50">
+                            Live
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3 text-slate-300">v{pkg.version}</td>
                     <td className="py-3 text-slate-400 font-sans truncate max-w-xs">
                       {pkg.summary}
