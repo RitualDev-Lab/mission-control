@@ -630,6 +630,7 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
   // 7. Fetch PyPI Metrics & Ecosystem Telemetry Cache
   const pypiPackages: PyPiPackageMetrics[] = [];
   const pypiTargets = [
+    "poly-build",
     "agentshield-defense",
     "dbshield-defense",
     "promptshield-defense",
@@ -748,12 +749,12 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
     },
     {
       name: "PyPI",
-      package: "agentshield-defense",
-      installCommand: "pip install agentshield-defense",
+      package: "poly-build",
+      installCommand: "pip install poly-build",
       totalInstalls: totalPyPiMonth || 816,
       uniqueUsers: pypiPackages.reduce((acc, p) => acc + p.downloads.lastWeek, 0) || 72,
       targetPlatform: "Python",
-      badge: "4 Official Packages",
+      badge: "5 Official Packages",
     },
     {
       name: "Open VSX",
