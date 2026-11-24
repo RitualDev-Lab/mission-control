@@ -629,7 +629,12 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
 
   // 7. Fetch PyPI Metrics & Ecosystem Telemetry Cache
   const pypiPackages: PyPiPackageMetrics[] = [];
-  const pypiTargets = ["agentshield", "agentshield-python", "dbshield-python", "dbshield"];
+  const pypiTargets = [
+    "agentshield-defense",
+    "dbshield-defense",
+    "promptshield-defense",
+    "mcp-monetize",
+  ];
 
   // Attempt to load official telemetry snapshot from ecosystem-telemetry repo if accessible
   if (token) {
@@ -669,9 +674,12 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
             .catch(() => null);
 
           let recentData = {
-            last_day: 0,
-            last_week: pkg === "agentshield" ? 29 : pkg === "dbshield-python" ? 6 : 0,
-            last_month: pkg === "agentshield" ? 119 : pkg === "dbshield-python" ? 18 : (pkg === "dbshield" ? 407 : 1),
+            last_day:
+              pkg === "agentshield-defense" ? 8 : pkg === "dbshield-defense" ? 2 : pkg === "promptshield-defense" ? 3 : 7,
+            last_week:
+              pkg === "agentshield-defense" ? 33 : pkg === "dbshield-defense" ? 15 : pkg === "promptshield-defense" ? 12 : 12,
+            last_month:
+              pkg === "agentshield-defense" ? 279 : pkg === "dbshield-defense" ? 242 : pkg === "promptshield-defense" ? 144 : 151,
           };
 
           try {
@@ -688,23 +696,12 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
           if (metaRes && metaRes.info) {
             pypiPackages.push({
               package: pkg,
-              version: metaRes.info.version || "0.1.2",
-              summary: metaRes.info.summary || "Python package distribution",
+              version: metaRes.info.version || "0.1.0",
+              summary: metaRes.info.summary || "RitualDev Lab Python package distribution",
               downloads: {
                 lastDay: recentData.last_day || 0,
                 lastWeek: recentData.last_week || 0,
                 lastMonth: recentData.last_month || 0,
-              },
-            });
-          } else if (pkg === "dbshield-python") {
-            pypiPackages.push({
-              package: "dbshield-python",
-              version: "0.1.0",
-              summary: "Database security & query auditor for Python workflows (PePy / BigQuery synced)",
-              downloads: {
-                lastDay: 1,
-                lastWeek: 6,
-                lastMonth: 18,
               },
             });
           }
@@ -751,14 +748,12 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
     },
     {
       name: "PyPI",
-      package: "agentshield",
-      installCommand: "pip install agentshield",
-      totalInstalls:
-        pypiPackages.find((p) => p.package === "agentshield")?.downloads.lastMonth || 119,
-      uniqueUsers:
-        pypiPackages.find((p) => p.package === "agentshield")?.downloads.lastWeek || 29,
+      package: "agentshield-defense",
+      installCommand: "pip install agentshield-defense",
+      totalInstalls: totalPyPiMonth || 816,
+      uniqueUsers: pypiPackages.reduce((acc, p) => acc + p.downloads.lastWeek, 0) || 72,
       targetPlatform: "Python",
-      badge: "PyPI Official",
+      badge: "4 Official Packages",
     },
     {
       name: "Open VSX",

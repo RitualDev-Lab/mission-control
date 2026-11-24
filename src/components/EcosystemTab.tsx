@@ -582,11 +582,21 @@ export function EcosystemTab({
       {/* 4. PyPI & Python Package Tracking Table */}
       {pypiPackages.length > 0 && (
         <div className="rounded-2xl bg-slate-900/70 border border-slate-800 p-6 backdrop-blur-md">
-          <div className="flex items-center space-x-2 mb-4">
-            <Package className="w-5 h-5 text-amber-400" />
-            <h3 className="font-bold text-white text-base">
-              PyPI & Python Package Registry (pypi.org / pypistats)
-            </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+            <div className="flex items-center space-x-2">
+              <Package className="w-5 h-5 text-amber-400" />
+              <h3 className="font-bold text-white text-base">
+                PyPI & Python Package Registry (pypi.org / pypistats)
+              </h3>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60">
+                {pypiPackages.length} Packages Live
+              </span>
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
+                {pypiPackages.reduce((acc, p) => acc + p.downloads.lastMonth, 0).toLocaleString()} DLs/mo
+              </span>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
