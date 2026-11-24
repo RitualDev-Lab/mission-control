@@ -635,6 +635,8 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
     "dbshield-defense",
     "promptshield-defense",
     "mcp-monetize",
+    "localrag-kit",
+    "fineprint-defense",
   ];
 
   // Attempt to load official telemetry snapshot from ecosystem-telemetry repo if accessible
@@ -703,6 +705,28 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
                 lastDay: recentData.last_day || 0,
                 lastWeek: recentData.last_week || 0,
                 lastMonth: recentData.last_month || 0,
+              },
+            });
+          } else if (pkg === "localrag-kit") {
+            pypiPackages.push({
+              package: "localrag-kit",
+              version: "0.1.0",
+              summary: "Offline, privacy-first RAG engine & local embedding kit for agents",
+              downloads: {
+                lastDay: 0,
+                lastWeek: 0,
+                lastMonth: 0,
+              },
+            });
+          } else if (pkg === "fineprint-defense") {
+            pypiPackages.push({
+              package: "fineprint-defense",
+              version: "0.1.0",
+              summary: "Legal contract & NDA defense engine with automated risk scoring",
+              downloads: {
+                lastDay: 0,
+                lastWeek: 0,
+                lastMonth: 0,
               },
             });
           }

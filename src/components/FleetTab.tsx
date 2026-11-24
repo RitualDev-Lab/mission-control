@@ -1,18 +1,30 @@
 "use client";
 
 import { dispatchWorkflow } from "@/lib/github";
+import {
+  dispatchFleetAlert,
+  formatDiscordPayload,
+  formatTelegramMessage,
+  type FleetNotificationEvent,
+} from "@/lib/notifications";
 import type { OrgRepoSummary, WorkflowDispatchOption } from "@/lib/types";
 import {
   AlertCircle,
+  Bell,
   CheckCircle2,
   Cpu,
   ExternalLink,
+  GitFork,
   Layers,
   Loader2,
+  MessageSquare,
   Package,
   Play,
   Rocket,
+  Send,
+  ShieldAlert,
   ShieldCheck,
+  Star,
   Terminal,
   Zap,
 } from "lucide-react";
@@ -89,6 +101,112 @@ export function FleetTab({ repos, onRefresh }: FleetTabProps) {
   const [tagInput, setTagInput] = useState<string>("v0.6.2");
   const [isDispatching, setIsDispatching] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Multi-Channel Fleet Dispatcher Simulator State
+  const [testEventType, setTestEventType] = useState<"star" | "fork" | "release" | "ci_failure">("star");
+  const [testRepo, setTestRepo] = useState<string>("poly");
+  const [customDiscordUrl, setCustomDiscordUrl] = useState<string>("");
+  const [customTelegramToken, setCustomTelegramToken] = useState<string>("");
+  const [customTelegramChatId, setCustomTelegramChatId] = useState<string>("");
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simResult, setSimResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const getMockEvent = (): FleetNotificationEvent => {
+    switch (testEventType) {
+      case "star":
+        return {
+          type: "star",
+          repo: testRepo,
+          sender: "octocat",
+          senderAvatar: "https://avatars.githubusercontent.com/u/583231?v=4",
+          totalStars: 42,
+          htmlUrl: `https://github.com/RitualDev-Lab/${testRepo}`,
+          timestamp: new Date().toISOString(),
+        };
+      case "fork":
+        return {
+          type: "fork",
+          repo: testRepo,
+          sender: "contributor-42",
+          senderAvatar: "https://avatars.githubusercontent.com/u/583231?v=4",
+          forkUrl: `https://github.com/contributor-42/${testRepo}`,
+          totalForks: 12,
+          timestamp: new Date().toISOString(),
+        };
+      case "release":
+        return {
+          type: "release",
+          repo: testRepo,
+          tagName: "v0.6.2",
+          releaseName: "v0.6.2 Polyglot Monorepo Engine",
+          releaseUrl: `https://github.com/RitualDev-Lab/${testRepo}/releases/tag/v0.6.2`,
+          author: "ritualdev",
+          body: "Release artifacts compiled and published to npm, PyPI, and GitHub Releases.",
+          timestamp: new Date().toISOString(),
+        };
+      case "ci_failure":
+        return {
+          type: "ci_failure",
+          repo: testRepo,
+          workflowName: "CI Matrix & Unit Verification",
+          runNumber: 142,
+          branch: "main",
+          commitSha: "e9a8f21c5b8d",
+          commitMessage: "fix(core): improve stream buffering",
+          runUrl: `https://github.com/RitualDev-Lab/${testRepo}/actions/runs/987654321`,
+          actor: "dependabot[bot]",
+          timestamp: new Date().toISOString(),
+        };
+    }
+  };
+
+  const handleTestDispatch = async () => {
+    setIsSimulating(true);
+    setSimResult(null);
+
+    const mockEvent = getMockEvent();
+
+    if (!customDiscordUrl && !(customTelegramToken && customTelegramChatId)) {
+      setTimeout(() => {
+        setIsSimulating(false);
+        setSimResult({
+          success: true,
+          message: "Simulation payload validated! (Add webhook URL or bot token above to deliver live).",
+        });
+      }, 500);
+      return;
+    }
+
+    try {
+      const res = await dispatchFleetAlert(
+        {
+          discordWebhookUrl: customDiscordUrl.trim() || undefined,
+          telegramBotToken: customTelegramToken.trim() || undefined,
+          telegramChatId: customTelegramChatId.trim() || undefined,
+        },
+        mockEvent
+      );
+
+      if (res.errors && res.errors.length > 0) {
+        setSimResult({
+          success: false,
+          message: res.errors.join(" | "),
+        });
+      } else {
+        setSimResult({
+          success: true,
+          message: `Live notification dispatched! (Discord: ${res.discord ? "Sent" : "Skipped"}, Telegram: ${res.telegram ? "Sent" : "Skipped"})`,
+        });
+      }
+    } catch (err: any) {
+      setSimResult({
+        success: false,
+        message: err.message || "Failed to deliver test alert.",
+      });
+    } finally {
+      setIsSimulating(false);
+    }
+  };
 
   // Available workflows for selected repo
   const availableWorkflows = PRESET_DISPATCH_OPTIONS.filter((w) => w.repo === selectedRepo);
@@ -343,6 +461,227 @@ export function FleetTab({ repos, onRefresh }: FleetTabProps) {
                   Deploys Next.js static bundle to Fastly edge with SSL custom domain.
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Automated Multi-Channel Fleet Webhook Dispatcher (Discord & Telegram) */}
+      <div className="rounded-2xl bg-slate-900/70 border border-slate-800 p-6 backdrop-blur-md space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <Bell className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="font-bold text-white text-base">
+                  Automated Fleet Webhook Dispatcher (Discord & Telegram)
+                </h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/60">
+                  Active Broker
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                Centralized real-time notification engine. Listens to GitHub organization webhooks and dispatches
+                formatted alerts when repos receive stars, forks, publish releases, or experience CI failures.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-slate-800/80 text-amber-300 border border-slate-700/80 flex items-center space-x-1.5">
+              <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+              <span>Stars & Forks</span>
+            </span>
+            <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-slate-800/80 text-sky-300 border border-slate-700/80 flex items-center space-x-1.5">
+              <Rocket className="w-3.5 h-3.5 text-sky-400" />
+              <span>Releases</span>
+            </span>
+            <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-slate-800/80 text-rose-300 border border-slate-700/80 flex items-center space-x-1.5">
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+              <span>CI Alarms</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Live Simulator & Webhook Tester */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Controls */}
+          <div className="space-y-4">
+            <h4 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+              <Terminal className="w-3.5 h-3.5 text-sky-400" />
+              <span>Interactive Event Tester & Channel Delivery</span>
+            </h4>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 mb-1.5">
+                  Event Trigger
+                </label>
+                <select
+                  value={testEventType}
+                  onChange={(e) => setTestEventType(e.target.value as any)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                >
+                  <option value="star">⭐ New Repository Star</option>
+                  <option value="fork">🍴 New Repository Fork</option>
+                  <option value="release">🚀 Release Workflow Finished</option>
+                  <option value="ci_failure">🚨 CI Failure (38 Repos)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 mb-1.5">
+                  Target Repository
+                </label>
+                <select
+                  value={testRepo}
+                  onChange={(e) => setTestRepo(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                >
+                  <option value="poly">RitualDev-Lab/poly</option>
+                  <option value="DevShelf">RitualDev-Lab/DevShelf</option>
+                  <option value="MCPShelf">RitualDev-Lab/MCPShelf</option>
+                  <option value="AgentShield">RitualDev-Lab/AgentShield</option>
+                  <option value="mission-control">RitualDev-Lab/mission-control</option>
+                  <option value="mcp-monetize">RitualDev-Lab/mcp-monetize</option>
+                  <option value="poly-cloud-api">RitualDev-Lab/poly-cloud-api</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-[11px] font-mono text-slate-400">
+                Discord Webhook URL (Optional for live delivery)
+              </label>
+              <input
+                type="password"
+                placeholder="https://discord.com/api/webhooks/..."
+                value={customDiscordUrl}
+                onChange={(e) => setCustomDiscordUrl(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 mb-1">
+                  Telegram Bot Token
+                </label>
+                <input
+                  type="password"
+                  placeholder="123456:ABC-DEF1234..."
+                  value={customTelegramToken}
+                  onChange={(e) => setCustomTelegramToken(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 mb-1">
+                  Telegram Chat ID
+                </label>
+                <input
+                  type="text"
+                  placeholder="-100123456789"
+                  value={customTelegramChatId}
+                  onChange={(e) => setCustomTelegramChatId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+            </div>
+
+            {simResult && (
+              <div
+                className={`p-3 rounded-xl border text-xs font-mono flex items-start space-x-2 ${
+                  simResult.success
+                    ? "bg-emerald-950/60 border-emerald-800 text-emerald-300"
+                    : "bg-rose-950/60 border-rose-800 text-rose-300"
+                }`}
+              >
+                {simResult.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
+                )}
+                <span>{simResult.message}</span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleTestDispatch}
+              disabled={isSimulating}
+              className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs font-mono transition-all border border-slate-700 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+            >
+              {isSimulating ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
+                  <span>Transmitting Dispatch Event...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Dispatch Simulated Test Alert</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Live Preview Pane */}
+          <div className="space-y-4">
+            <h4 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+              <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Real-Time Channel Payload Preview</span>
+            </h4>
+
+            {/* Discord Simulated Embed */}
+            <div className="rounded-xl bg-[#2b2d31] border border-slate-700/80 p-4 font-sans text-xs space-y-2">
+              <div className="flex items-center space-x-2 text-slate-400 text-[11px]">
+                <span className="font-bold text-white">RitualDev Fleet Radar</span>
+                <span className="bg-[#5865F2] text-white text-[9px] px-1 py-0.2 rounded font-mono">
+                  BOT
+                </span>
+                <span>Today at {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+
+              <div
+                className={`p-3 rounded-lg border-l-4 bg-[#1e1f22] space-y-2 ${
+                  testEventType === "star"
+                    ? "border-amber-400"
+                    : testEventType === "fork"
+                    ? "border-purple-400"
+                    : testEventType === "release"
+                    ? "border-emerald-400"
+                    : "border-rose-500"
+                }`}
+              >
+                <div className="font-bold text-white text-sm">
+                  {formatDiscordPayload(getMockEvent()).embeds[0].title}
+                </div>
+                <div className="text-slate-300 text-xs">
+                  {formatDiscordPayload(getMockEvent()).embeds[0].description}
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800 text-[11px]">
+                  {formatDiscordPayload(getMockEvent()).embeds[0].fields?.slice(0, 2).map((f) => (
+                    <div key={f.name}>
+                      <span className="text-slate-400 font-semibold block">{f.name}</span>
+                      <span className="text-slate-200">{f.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Telegram Simulated Preview */}
+            <div className="rounded-xl bg-slate-950/80 border border-slate-800 p-3 font-mono text-[11px] text-slate-300 space-y-1">
+              <div className="flex items-center justify-between text-slate-400 text-[10px] pb-1 border-b border-slate-800">
+                <span>Telegram Bot Output (HTML Mode)</span>
+                <span className="text-sky-400">@RitualDevFleetBot</span>
+              </div>
+              <pre className="whitespace-pre-wrap font-sans text-xs text-slate-200 pt-1">
+                {formatTelegramMessage(getMockEvent()).replace(/<[^>]+>/g, "")}
+              </pre>
             </div>
           </div>
         </div>
