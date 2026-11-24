@@ -187,6 +187,7 @@ export function FleetTab({ repos, onRefresh }: FleetTabProps) {
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-white focus:outline-none focus:border-sky-500 cursor-pointer"
                 >
                   <option value="poly">poly (Polyglot Monorepo CLI)</option>
+                  <option value="DevShelf">DevShelf (Developer Catalog & Tools)</option>
                   <option value="AgentShield">AgentShield (AI Runtime Defense)</option>
                   <option value="mission-control">mission-control (Executive Cockpit)</option>
                   <option value="ecosystem-telemetry">ecosystem-telemetry (Scraper Cron)</option>
