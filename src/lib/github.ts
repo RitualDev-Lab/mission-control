@@ -28,6 +28,12 @@ export const KNOWN_NPM_PACKAGES = [
   "@ritualdev-lab/agentshield",
   "@ritualdev-lab/skillprism",
   "@ritualdev-lab/dbshield",
+  "@ritualdev-lab/devshelf",
+  "@ritualdev-lab/mcpshelf",
+  "@ritualdev-lab/mcp-builder-kit",
+  "@ritualdev-lab/mcp-monetize",
+  "@ritualdev-lab/mockforge",
+  "@ritualdev-lab/web-sec-auditor",
 ];
 
 export function categorizeRepo(name: string): OrgRepoSummary["category"] {
@@ -277,30 +283,32 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
   const npmPackages = await Promise.all(npmPromises);
 
   // 3. Fetch Open VSX
-  const openVsx: OpenVsxMetrics[] = [];
-  try {
-    const vsxRes = await fetch("https://open-vsx.org/api/ritualdev-lab/vscode-poly");
-    if (vsxRes.ok) {
-      const data = await vsxRes.json();
-      openVsx.push({
-        extension: "ritualdev-lab/vscode-poly",
-        displayName: data.displayName || "Poly Monorepo Orchestrator",
-        version: data.version || "0.6.0",
-        downloadCount: data.downloadCount || 72,
-        reviewCount: data.reviewCount || 0,
-        averageRating: data.averageRating || 5,
-      });
-    }
-  } catch {
-    openVsx.push({
-      extension: "ritualdev-lab/vscode-poly",
-      displayName: "Poly Monorepo Orchestrator",
-      version: "0.6.0",
-      downloadCount: 72,
-      reviewCount: 0,
-      averageRating: 5,
-    });
-  }
+  const openVsxTargets = [
+    { slug: "ritualdev-lab/vscode-poly", fallbackName: "Poly Monorepo Orchestrator" },
+    { slug: "ritualdev-lab/agentshield-defense", fallbackName: "AgentShield — AI Agent Security & Sandbox" },
+  ];
+  const openVsxResults = await Promise.all(
+    openVsxTargets.map(async (ext) => {
+      try {
+        const vsxRes = await fetch(`https://open-vsx.org/api/${ext.slug}`);
+        if (vsxRes.ok) {
+          const data = await vsxRes.json();
+          return {
+            extension: ext.slug,
+            displayName: data.displayName || ext.fallbackName,
+            version: data.version || "0.0.0",
+            downloadCount: data.downloadCount || 0,
+            reviewCount: data.reviewCount || 0,
+            averageRating: data.averageRating || 0,
+          } as OpenVsxMetrics;
+        }
+      } catch {
+        // Ignore network errors cleanly without fabricating metrics
+      }
+      return null;
+    })
+  );
+  const openVsx: OpenVsxMetrics[] = openVsxResults.filter((x): x is OpenVsxMetrics => x !== null);
 
   // 4. Fetch GitHub Release Binaries
   const binaries: GitHubBinaryMetrics[] = [];
@@ -402,7 +410,7 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
                     ? "darwin"
                     : "linux",
                   arch: "x64",
-                  polyVersion: rName === "poly" ? "0.6.1" : "latest",
+                  polyVersion: rName === "poly" ? (npmPackages.find((p) => p.package === "@ritualdev-lab/poly")?.latestVersion || "latest") : "latest",
                   runtimeVersion: "GitHub Actions Runner",
                   htmlUrl: run.html_url,
                   status: run.status,
@@ -637,6 +645,7 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
     "mcp-monetize",
     "localrag-kit",
     "fineprint-defense",
+    "mcpshelf",
   ];
 
   // Attempt to load official telemetry snapshot from ecosystem-telemetry repo if accessible
@@ -677,12 +686,9 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
             .catch(() => null);
 
           let recentData = {
-            last_day:
-              pkg === "agentshield-defense" ? 8 : pkg === "dbshield-defense" ? 2 : pkg === "promptshield-defense" ? 3 : 7,
-            last_week:
-              pkg === "agentshield-defense" ? 33 : pkg === "dbshield-defense" ? 15 : pkg === "promptshield-defense" ? 12 : 12,
-            last_month:
-              pkg === "agentshield-defense" ? 279 : pkg === "dbshield-defense" ? 242 : pkg === "promptshield-defense" ? 144 : 151,
+            last_day: 0,
+            last_week: 0,
+            last_month: 0,
           };
 
           try {
@@ -707,22 +713,11 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
                 lastMonth: recentData.last_month || 0,
               },
             });
-          } else if (pkg === "localrag-kit") {
+          } else {
             pypiPackages.push({
-              package: "localrag-kit",
-              version: "0.1.0",
-              summary: "Offline, privacy-first RAG engine & local embedding kit for agents",
-              downloads: {
-                lastDay: 0,
-                lastWeek: 0,
-                lastMonth: 0,
-              },
-            });
-          } else if (pkg === "fineprint-defense") {
-            pypiPackages.push({
-              package: "fineprint-defense",
-              version: "0.1.0",
-              summary: "Legal contract & NDA defense engine with automated risk scoring",
+              package: pkg,
+              version: "not-published",
+              summary: "Staged locally (not yet published to PyPI)",
               downloads: {
                 lastDay: 0,
                 lastWeek: 0,
@@ -741,17 +736,20 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
   const scoopTraffic = trafficData.find((t) => t.repo === "scoop-bucket");
   const totalPyPiMonth = pypiPackages.reduce((acc, p) => acc + p.downloads.lastMonth, 0);
 
+  const polyLatestVersion =
+    npmPackages.find((p) => p.package === "@ritualdev-lab/poly")?.latestVersion || "latest";
+  const totalOpenVsxInstalls = openVsx.reduce((acc, x) => acc + x.downloadCount, 0);
+
   // 8. Multi-Registry Distribution Metrics (Homebrew, Scoop, npm, PyPI, Open VSX, GitHub Releases)
   const distributions: PackageManagerDistribution[] = [
     {
       name: "npm",
-      package: "@ritualdev-lab/poly",
+      package: `@ritualdev-lab/* (${npmPackages.length} packages)`,
       installCommand: "npm install -g @ritualdev-lab/poly",
-      totalInstalls:
-        npmPackages.find((p) => p.package === "@ritualdev-lab/poly")?.downloads.lastMonth || 840,
-      uniqueUsers: 840,
+      totalInstalls: npmPackages.reduce((acc, p) => acc + p.downloads.lastMonth, 0),
+      uniqueUsers: npmPackages.reduce((acc, p) => acc + p.downloads.lastWeek, 0),
       targetPlatform: "Node.js / Multi",
-      badge: "v0.6.1 Live",
+      badge: `poly v${polyLatestVersion}`,
     },
     {
       name: "Homebrew",
@@ -775,19 +773,19 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
       name: "PyPI",
       package: "poly-build",
       installCommand: "pip install poly-build",
-      totalInstalls: totalPyPiMonth || 816,
-      uniqueUsers: pypiPackages.reduce((acc, p) => acc + p.downloads.lastWeek, 0) || 72,
+      totalInstalls: totalPyPiMonth,
+      uniqueUsers: pypiPackages.reduce((acc, p) => acc + p.downloads.lastWeek, 0),
       targetPlatform: "Python",
-      badge: "5 Official Packages",
+      badge: `${pypiPackages.length} Tracked Packages`,
     },
     {
       name: "Open VSX",
-      package: "ritualdev-lab/vscode-poly",
+      package: `ritualdev-lab (${openVsx.length} extensions)`,
       installCommand: "ext install ritualdev-lab.vscode-poly",
-      totalInstalls: openVsx[0]?.downloadCount || 84,
-      uniqueUsers: openVsx[0]?.downloadCount || 84,
+      totalInstalls: totalOpenVsxInstalls,
+      uniqueUsers: totalOpenVsxInstalls,
       targetPlatform: "VS Code IDE",
-      badge: "5.0 ★ Rating",
+      badge: `${openVsx.length} Extensions Live`,
     },
     {
       name: "GitHub Releases",
