@@ -21,16 +21,30 @@ interface RadarTabProps {
   repos: OrgRepoSummary[];
 }
 
-type CategoryFilter = "all" | "devtools" | "security" | "governance" | "infrastructure" | "mcp" | "private" | "other";
+type CategoryFilter =
+  | "all"
+  | "utilities"
+  | "devtools"
+  | "security"
+  | "governance"
+  | "infrastructure"
+  | "mcp"
+  | "private"
+  | "other";
 
 export function RadarTab({ repos }: RadarTabProps) {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
-  const [sortBy, setSortBy] = useState<"stars" | "updated" | "issues">("stars");
+  const [sortBy, setSortBy] = useState<"stars" | "prs" | "updated" | "issues">("stars");
   const [selectedRepo, setSelectedRepo] = useState<OrgRepoSummary | null>(null);
 
   const categories = [
     { key: "all" as CategoryFilter, label: "All Repos", count: repos.length },
+    {
+      key: "utilities" as CategoryFilter,
+      label: "🧰 Utilities & Catalogs",
+      count: repos.filter((r) => r.category === "utilities").length,
+    },
     {
       key: "devtools" as CategoryFilter,
       label: "⚡ DevTools & Poly",
@@ -84,6 +98,7 @@ export function RadarTab({ repos }: RadarTabProps) {
       })
       .sort((a, b) => {
         if (sortBy === "stars") return b.stars - a.stars;
+        if (sortBy === "prs") return b.openPrCount - a.openPrCount;
         if (sortBy === "issues") return b.openIssuesCount - a.openIssuesCount;
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
@@ -138,8 +153,9 @@ export function RadarTab({ repos }: RadarTabProps) {
             className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none"
           >
             <option value="stars">Most Stars</option>
-            <option value="updated">Recent Activity</option>
+            <option value="prs">Open PRs</option>
             <option value="issues">Open Issues</option>
+            <option value="updated">Recent Activity</option>
           </select>
           <span className="text-slate-500">•</span>
           <span>Showing {filteredRepos.length} of {repos.length}</span>
@@ -209,7 +225,7 @@ export function RadarTab({ repos }: RadarTabProps) {
 
             {/* Metrics Footer */}
             <div>
-              <div className="grid grid-cols-4 gap-2 py-2 px-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center font-mono text-[11px] mb-3">
+              <div className="grid grid-cols-5 gap-1.5 py-2 px-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center font-mono text-[11px] mb-3">
                 <div>
                   <span className="text-slate-500 block text-[9px] uppercase">Stars</span>
                   <span className="text-slate-200 font-semibold">{repo.stars}</span>
@@ -217,6 +233,12 @@ export function RadarTab({ repos }: RadarTabProps) {
                 <div>
                   <span className="text-slate-500 block text-[9px] uppercase">Forks</span>
                   <span className="text-slate-300 font-semibold">{repo.forks}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[9px] uppercase">PRs</span>
+                  <span className={repo.openPrCount > 0 ? "text-amber-400 font-semibold" : "text-slate-400"}>
+                    {repo.openPrCount}
+                  </span>
                 </div>
                 <div>
                   <span className="text-slate-500 block text-[9px] uppercase">Issues</span>
@@ -276,6 +298,36 @@ export function RadarTab({ repos }: RadarTabProps) {
               </button>
             </div>
 
+            {/* 5-Stat Quick Metrics Bar */}
+            <div className="grid grid-cols-5 gap-2 py-2.5 px-3 rounded-xl bg-slate-950/70 border border-slate-800/80 text-center font-mono text-xs mb-6">
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase">Stars</span>
+                <span className="text-white font-bold">{selectedRepo.stars}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase">Forks</span>
+                <span className="text-slate-300 font-bold">{selectedRepo.forks}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase">PRs</span>
+                <span className={selectedRepo.openPrCount > 0 ? "text-amber-400 font-bold" : "text-slate-400 font-bold"}>
+                  {selectedRepo.openPrCount}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase">Issues</span>
+                <span className={selectedRepo.openIssuesCount > 0 ? "text-slate-200 font-bold" : "text-slate-400 font-bold"}>
+                  {selectedRepo.openIssuesCount}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase">Alerts</span>
+                <span className={selectedRepo.securityAlertsCount > 0 ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>
+                  {selectedRepo.securityAlertsCount}
+                </span>
+              </div>
+            </div>
+
             {/* Pull Requests */}
             <div className="mb-6">
               <h4 className="text-xs font-bold uppercase tracking-wider font-mono text-slate-400 mb-3 flex items-center">
@@ -304,6 +356,49 @@ export function RadarTab({ repos }: RadarTabProps) {
                           by {pr.author}
                         </span>
                       </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Open Issues */}
+            <div className="mb-6">
+              <h4 className="text-xs font-bold uppercase tracking-wider font-mono text-slate-400 mb-3 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-1.5 text-amber-400" />
+                Open Issues ({selectedRepo.issues.length})
+              </h4>
+              {selectedRepo.issues.length === 0 ? (
+                <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800 text-center text-xs text-slate-500 font-mono">
+                  No open issues in this repository.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedRepo.issues.map((issue) => (
+                    <a
+                      key={issue.id}
+                      href={issue.htmlUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 block transition-colors group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-slate-200 group-hover:text-amber-400">
+                          #{issue.number} {issue.title}
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-500">
+                          by {issue.author}
+                        </span>
+                      </div>
+                      {issue.labels && issue.labels.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {issue.labels.map((lbl) => (
+                            <span key={lbl} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
+                              {lbl}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </a>
                   ))}
                 </div>

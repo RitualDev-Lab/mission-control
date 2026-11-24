@@ -62,6 +62,24 @@ const PRESET_DISPATCH_OPTIONS: WorkflowDispatchOption[] = [
     workflowName: "Run Ingestion Telemetry Cron",
     description: "Manually triggers the 6-hour registry metrics scraper across npm, Open VSX, and GitHub.",
   },
+  {
+    repo: "DevShelf",
+    workflowId: "deploy-pages.yml",
+    workflowName: "Deploy DevShelf to GitHub Pages",
+    description: "Builds DevShelf directory static site and pushes live to edge at devshelf.ritualdev.in.",
+  },
+  {
+    repo: "DevShelf",
+    workflowId: "ci.yml",
+    workflowName: "DevShelf CI & Catalog Validator Matrix",
+    description: "Validates schema adherence, category structure, and dead link checking for all 596 utilities.",
+  },
+  {
+    repo: "DevShelf",
+    workflowId: "publish-package.yml",
+    workflowName: "Publish DevShelf Package & Provenance",
+    description: "Publishes latest @ritualdev-lab/devshelf npm package with Sigstore cryptographic provenance.",
+  },
 ];
 
 export function FleetTab({ repos, onRefresh }: FleetTabProps) {

@@ -33,6 +33,14 @@ export const KNOWN_NPM_PACKAGES = [
 export function categorizeRepo(name: string): OrgRepoSummary["category"] {
   const n = name.toLowerCase();
   if (
+    n.includes("devshelf") ||
+    n.includes("util") ||
+    n.includes("utilities") ||
+    n.includes("awesome")
+  ) {
+    return "utilities";
+  }
+  if (
     n.includes("poly") ||
     n.includes("homebrew") ||
     n.includes("scoop") ||
@@ -117,13 +125,20 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
       let ciStatus: OrgRepoSummary["ciStatus"] = "unknown";
       let securityAlertsCount = 0;
 
-      // Only query sub-resources if token exists to conserve rate limits or if relevant
-      if (token && repo.open_issues_count > 0) {
+      // Query pulls and issues for repos with open items
+      if (repo.open_issues_count > 0) {
         try {
-          const pullsRes = await fetch(
-            `https://api.github.com/repos/${ORG_NAME}/${repoName}/pulls?state=open&per_page=5`,
-            { headers: ghHeaders }
-          );
+          const [pullsRes, issuesRes] = await Promise.all([
+            fetch(
+              `https://api.github.com/repos/${ORG_NAME}/${repoName}/pulls?state=open&per_page=10`,
+              { headers: ghHeaders }
+            ),
+            fetch(
+              `https://api.github.com/repos/${ORG_NAME}/${repoName}/issues?state=open&per_page=10`,
+              { headers: ghHeaders }
+            ),
+          ]);
+
           if (pullsRes.ok) {
             const prsData = await pullsRes.json();
             if (Array.isArray(prsData)) {
@@ -139,13 +154,30 @@ export async function fetchFullMissionControlData(githubToken?: string): Promise
               }));
             }
           }
+
+          if (issuesRes.ok) {
+            const rawIssues = await issuesRes.json();
+            if (Array.isArray(rawIssues)) {
+              issues = rawIssues
+                .filter((it: any) => !it.pull_request)
+                .map((it: any) => ({
+                  id: it.id,
+                  number: it.number,
+                  title: it.title,
+                  author: it.user?.login || "unknown",
+                  htmlUrl: it.html_url,
+                  createdAt: it.created_at,
+                  labels: (it.labels || []).map((l: any) => l.name || l),
+                }));
+            }
+          }
         } catch {
           // Ignore
         }
       }
 
       // Check CI workflow runs for top repos
-      if (["poly", "FinePrintAI", "AgentShield", "ecosystem-telemetry", "vscode-poly"].includes(repoName)) {
+      if (["poly", "FinePrintAI", "AgentShield", "ecosystem-telemetry", "vscode-poly", "DevShelf"].includes(repoName)) {
         try {
           const runsRes = await fetch(
             `https://api.github.com/repos/${ORG_NAME}/${repoName}/actions/runs?per_page=1`,

@@ -11,7 +11,7 @@ export interface OrgRepoSummary {
   htmlUrl: string;
   isPrivate: boolean;
   language: string;
-  category: "devtools" | "security" | "governance" | "infrastructure" | "mcp" | "other";
+  category: "devtools" | "security" | "governance" | "infrastructure" | "mcp" | "utilities" | "other";
   ciStatus?: "success" | "failure" | "in_progress" | "unknown";
   latestCommit?: {
     message: string;
